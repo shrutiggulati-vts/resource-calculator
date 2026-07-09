@@ -1,0 +1,1084 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Resource Calculator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #f7f6f3;
+      --surface:   #ffffff;
+      --border:    #e4e2dc;
+      --border2:   #d0cdc4;
+      --text:      #1a1916;
+      --text2:     #6b6760;
+      --text3:     #a09d98;
+      --accent:    #1a1916;
+      --green:     #1a6645;
+      --green-bg:  #edf7f2;
+      --amber:     #92510a;
+      --amber-bg:  #fef8ee;
+      --red:       #8f1f1f;
+      --red-bg:    #fdf2f2;
+      --blue:      #1a3a6e;
+      --blue-bg:   #f0f4fb;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Geist', system-ui, sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+      min-height: 100vh;
+    }
+
+    /* ── Layout ── */
+    .app { display: flex; min-height: 100vh; }
+
+    .sidebar {
+      width: 220px;
+      flex-shrink: 0;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      padding: 32px 0;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .sidebar-brand {
+      padding: 0 24px 28px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 20px;
+    }
+
+    .sidebar-brand h1 {
+      font-family: 'Instrument Serif', serif;
+      font-size: 20px;
+      font-weight: 400;
+      color: var(--text);
+      line-height: 1.2;
+    }
+
+    .sidebar-brand p {
+      font-size: 11px;
+      color: var(--text3);
+      margin-top: 3px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .nav-section {
+      padding: 0 12px;
+      margin-bottom: 4px;
+    }
+
+    .nav-label {
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text3);
+      padding: 0 12px;
+      margin-bottom: 4px;
+      margin-top: 16px;
+    }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 400;
+      color: var(--text2);
+      transition: all 0.12s;
+      border: none;
+      background: none;
+      width: 100%;
+      text-align: left;
+      font-family: inherit;
+    }
+
+    .nav-item:hover { background: var(--bg); color: var(--text); }
+    .nav-item.active { background: var(--bg); color: var(--text); font-weight: 500; }
+    .nav-item .dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--border2); flex-shrink: 0;
+      transition: background 0.12s;
+    }
+    .nav-item.active .dot { background: var(--text); }
+
+    .sidebar-footer {
+      margin-top: auto;
+      padding: 20px 24px 0;
+      border-top: 1px solid var(--border);
+    }
+
+    .main {
+      flex: 1;
+      min-width: 0;
+      padding: 40px 48px;
+      max-width: 1000px;
+    }
+
+    /* ── Page header ── */
+    .page-header {
+      margin-bottom: 32px;
+      padding-bottom: 24px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .page-title {
+      font-family: 'Instrument Serif', serif;
+      font-size: 28px;
+      font-weight: 400;
+      color: var(--text);
+      line-height: 1.1;
+    }
+
+    .page-sub {
+      font-size: 12px;
+      color: var(--text3);
+      margin-top: 4px;
+    }
+
+    /* ── Stat cards ── */
+    .stat-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-bottom: 32px;
+    }
+
+    .stat-row.cols-4 { grid-template-columns: repeat(4, 1fr); }
+
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 18px 20px;
+    }
+
+    .stat-value {
+      font-family: 'Instrument Serif', serif;
+      font-size: 30px;
+      line-height: 1;
+      color: var(--text);
+    }
+
+    .stat-value.green { color: var(--green); }
+    .stat-value.amber { color: var(--amber); }
+    .stat-value.red   { color: var(--red);   }
+
+    .stat-label {
+      font-size: 11px;
+      color: var(--text3);
+      margin-top: 6px;
+      letter-spacing: 0.02em;
+    }
+
+    /* ── Section ── */
+    .section { margin-bottom: 36px; }
+
+    .section-title {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text3);
+      margin-bottom: 12px;
+    }
+
+    /* ── Table ── */
+    .table-wrap { overflow-x: auto; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    thead th {
+      text-align: left;
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text3);
+      letter-spacing: 0.04em;
+      padding: 0 12px 10px;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+
+    thead th.r { text-align: right; }
+
+    tbody tr { border-bottom: 1px solid var(--border); transition: background 0.1s; }
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: var(--bg); }
+
+    tbody td {
+      padding: 11px 12px;
+      color: var(--text);
+      white-space: nowrap;
+    }
+
+    tbody td.r { text-align: right; }
+    tbody td.muted { color: var(--text3); }
+    tbody td.bold { font-weight: 600; }
+    tbody td.green { color: var(--green); font-weight: 500; }
+    tbody td.amber { color: var(--amber); }
+    tbody td.red   { color: var(--red); font-weight: 500; }
+
+    .table-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    /* ── Inputs ── */
+    input[type=text], input[type=number], input[type=date] {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      padding: 5px 8px;
+      font-size: 13px;
+      font-family: inherit;
+      outline: none;
+      transition: border 0.12s;
+    }
+
+    input:focus { border-color: var(--text); }
+    input[type=number] { text-align: right; }
+    input::placeholder { color: var(--text3); }
+    input[type=number]::-webkit-inner-spin-button { opacity: 0.4; }
+
+    /* ── Buttons ── */
+    .btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 7px 14px; border-radius: 8px; font-size: 12px;
+      font-weight: 500; cursor: pointer; border: none;
+      font-family: inherit; transition: all 0.12s; letter-spacing: 0.01em;
+    }
+
+    .btn-primary { background: var(--text); color: white; }
+    .btn-primary:hover { background: #333; }
+    .btn-ghost {
+      background: transparent; color: var(--text2);
+      border: 1px solid var(--border);
+    }
+    .btn-ghost:hover { background: var(--bg); color: var(--text); border-color: var(--border2); }
+
+    /* ── Badges ── */
+    .badge {
+      display: inline-flex; align-items: center;
+      padding: 2px 8px; border-radius: 20px;
+      font-size: 11px; font-weight: 500; white-space: nowrap;
+    }
+
+    .badge-green  { background: var(--green-bg);  color: var(--green); }
+    .badge-amber  { background: var(--amber-bg);  color: var(--amber); }
+    .badge-red    { background: var(--red-bg);    color: var(--red);   }
+    .badge-blue   { background: var(--blue-bg);   color: var(--blue);  }
+    .badge-neutral{ background: var(--bg);        color: var(--text2); border: 1px solid var(--border); }
+
+    /* ── Collapsible client card ── */
+    .client-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      margin-bottom: 8px;
+      overflow: hidden;
+    }
+
+    .client-card-header {
+      display: flex; align-items: center; gap: 12px;
+      padding: 14px 20px; cursor: pointer;
+      transition: background 0.1s;
+    }
+
+    .client-card-header:hover { background: var(--bg); }
+
+    .client-card-header .name {
+      font-size: 14px; font-weight: 500; flex: 1;
+    }
+
+    .client-card-body {
+      padding: 0 20px 20px;
+      border-top: 1px solid var(--border);
+    }
+
+    .field-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+      margin-top: 16px;
+    }
+
+    .field-grid.cols3 { grid-template-columns: repeat(3, 1fr); }
+
+    .field-label {
+      font-size: 11px;
+      color: var(--text3);
+      margin-bottom: 5px;
+      letter-spacing: 0.03em;
+    }
+
+    /* ── Divider ── */
+    .divider { border: none; border-top: 1px solid var(--border); margin: 24px 0; }
+
+    /* ── Row util ── */
+    .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .spacer { flex: 1; }
+
+    /* ── Week table inputs ── */
+    .week-input { width: 56px; }
+
+    /* ── New client row grid ── */
+    .nc-grid {
+      display: grid;
+      grid-template-columns: 140px 68px 68px 72px 108px 72px 60px 100px 80px 82px 28px;
+      gap: 0 8px;
+      align-items: center;
+      padding: 8px 16px;
+    }
+
+    .nc-grid input { width: 100%; }
+
+    .nc-header {
+      font-size: 11px;
+      color: var(--text3);
+      letter-spacing: 0.03em;
+      padding: 0 16px 8px;
+      display: grid;
+      grid-template-columns: 140px 68px 68px 72px 108px 72px 60px 100px 80px 82px 28px;
+      gap: 0 8px;
+    }
+
+    .nc-header span { text-align: right; }
+    .nc-header span:first-child { text-align: left; }
+
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+
+    /* ── Rate inputs in header ── */
+    .rate-row { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+    .rate-group { display: flex; align-items: center; gap: 6px; }
+    .rate-group label { font-size: 11px; color: var(--text3); white-space: nowrap; }
+    .rate-group input { width: 72px; }
+
+    @media (max-width: 768px) {
+      .sidebar { display: none; }
+      .main { padding: 24px 20px; }
+    }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState } = React;
+
+// ── Constants ────────────────────────────────────────────────────────────────
+const MO = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+const CLIENTS = [
+  { name:"Nuveen",             short:"Nuveen",  pct:5,  defFTE:5, docs:82,   docsets:22, initFteDays:10,  base:new Date(2026,4,8)  },
+  { name:"MIT Cambridge",      short:"MIT",     pct:33, defFTE:1, docs:97,   docsets:6,  initFteDays:1,   base:new Date(2026,4,5)  },
+  { name:"Trump Organization", short:"Trump",   pct:15, defFTE:2, docs:55,   docsets:26, initFteDays:24,  base:new Date(2026,4,22) },
+  { name:"Granite Properties", short:"Granite", pct:17, defFTE:1, docs:312,  docsets:59, initFteDays:82,  base:new Date(2026,5,19) },
+  { name:"RXR Realty",         short:"RXR",     pct:14, defFTE:2, docs:1526, docsets:38, initFteDays:189, base:new Date(2026,6,3)  },
+];
+
+const DOC_TYPES = [
+  { key:"masterLease",        label:"Master Lease"        },
+  { key:"masterAgreement",    label:"Master Agreement"    },
+  { key:"amendment",          label:"Amendment"           },
+  { key:"notice",             label:"Notice"              },
+  { key:"commencementLetter", label:"Commencement Letter" },
+];
+
+const MONTH_NAMES = {jan:"January",feb:"February",mar:"March",apr:"April",may:"May",jun:"June",jul:"July",aug:"August",sep:"September",oct:"October",nov:"November",dec:"December"};
+
+const INIT_WEEKS = [
+  { label:"Apr 13", monthKey:"apr2026", ftes:[3,1,1,1,2] },
+  { label:"Apr 20", monthKey:"apr2026", ftes:[4,1,1,1,2] },
+  { label:"Apr 27", monthKey:"apr2026", ftes:[5,1,1,1,2] },
+  { label:"May 4",  monthKey:"may2026", ftes:[5,1,2,1,2] },
+];
+
+const clientDefaults = () => CLIENTS.map(c => ({
+  ftes:c.defFTE, pct:c.pct, docsets:c.docsets,
+  masterLease:c.docs, masterAgreement:0, amendment:0,
+  notice:0, commencementLetter:0, invalidDocs:0, doNotProcess:0,
+}));
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+function addWorkDays(from, days) {
+  const d=new Date(from); let a=0; const n=Math.ceil(Math.max(0,days));
+  while(a<n){d.setDate(d.getDate()+1);if(d.getDay()!==0&&d.getDay()!==6)a++;}
+  return d;
+}
+function workDaysUntil(from, to) {
+  if(to<=from) return 0; let c=0; const d=new Date(from);
+  while(d<to){d.setDate(d.getDate()+1);if(d.getDay()!==0&&d.getDay()!==6)c++;}
+  return c;
+}
+const calToWork = c => Math.max(1,Math.round(c*5/7));
+const fmtDate   = d => MO[d.getMonth()]+" "+d.getDate()+", "+d.getFullYear();
+const fmtMoney  = n => "$"+Math.round(n).toLocaleString();
+const fmtPct    = n => Math.round(n*100)+"%";
+const p0 = s => { const n=parseInt(s,10); return isNaN(n)||n<0?0:n; };
+const pf = (s,def) => { const n=parseFloat(s); return isNaN(n)||n<=0?def:n; };
+const mlabel = k => (MONTH_NAMES[k.slice(0,3)]??k.slice(0,3))+" "+k.slice(3);
+
+function nextWeekInfo(weeks) {
+  if(!weeks.length) return {label:"May 18",monthKey:"may2026",ftes:CLIENTS.map(()=>0)};
+  const last=weeks[weeks.length-1]; const parts=last.label.split(" ");
+  const mIdx=MO.indexOf(parts[0]);
+  if(mIdx===-1) return {label:"",monthKey:last.monthKey,ftes:[...last.ftes]};
+  const next=new Date(2026,mIdx,parseInt(parts[1])+7);
+  const ms=MO[next.getMonth()].toLowerCase().slice(0,3);
+  return {label:`${MO[next.getMonth()]} ${next.getDate()}`,monthKey:`${ms}${next.getFullYear()}`,ftes:[...last.ftes]};
+}
+
+// ── Stat card ────────────────────────────────────────────────────────────────
+const Stat = ({value, label, tone}) => (
+  <div className="stat-card">
+    <div className={`stat-value${tone==="green"?" green":tone==="amber"?" amber":tone==="red"?" red":""}`}>{value}</div>
+    <div className="stat-label">{label}</div>
+  </div>
+);
+
+// ── Badge ─────────────────────────────────────────────────────────────────────
+const Badge = ({children, tone="neutral"}) => (
+  <span className={`badge badge-${tone}`}>{children}</span>
+);
+
+// ── Collapsible client card ───────────────────────────────────────────────────
+const ClientCard = ({client, d, derived, onField, defaultOpen=false}) => {
+  const [open, setOpen] = useState(defaultOpen);
+  const {total, proc, impliedRate, eta, delta, thru} = derived;
+  const badge = d.pct>=100 ? "green" : delta>7 ? "red" : delta>0 ? "amber" : "neutral";
+  const badgeLabel = d.pct>=100 ? "Complete" : delta>0 ? `+${delta}d late` : delta<0 ? `${Math.abs(delta)}d early` : "On track";
+
+  return (
+    <div className="client-card">
+      <div className="client-card-header" onClick={()=>setOpen(o=>!o)}>
+        <span style={{fontSize:11,color:"var(--text3)",width:12}}>{open?"▾":"▸"}</span>
+        <span className="name">{client.name}</span>
+        <Badge tone={badge}>{badgeLabel}</Badge>
+        <span style={{fontSize:12,color:"var(--text3)"}}>{d.pct}% done</span>
+        <span style={{fontSize:12,color:"var(--text2)"}}>ETA {fmtDate(eta)}</span>
+        <span style={{fontSize:12,color:"var(--text3)"}}>{d.ftes} FTE{d.ftes!==1?"s":""}</span>
+      </div>
+      {open && (
+        <div className="client-card-body">
+          <div className="field-grid cols3" style={{marginBottom:16}}>
+            <div>
+              <div className="field-label">% Complete</div>
+              <input type="number" value={d.pct} onChange={e=>onField("pct",Math.min(100,p0(e.target.value)))} style={{width:72}} />
+            </div>
+            <div>
+              <div className="field-label">FTEs assigned</div>
+              <input type="number" value={d.ftes} onChange={e=>onField("ftes",p0(e.target.value))} style={{width:72}} />
+            </div>
+            <div>
+              <div className="field-label">Docsets</div>
+              <input type="number" value={d.docsets} onChange={e=>onField("docsets",p0(e.target.value))} style={{width:72}} />
+            </div>
+          </div>
+          <div style={{fontSize:11,color:"var(--text3)",marginBottom:8,letterSpacing:"0.03em"}}>Documents by type</div>
+          <div className="field-grid">
+            {DOC_TYPES.map(({key,label})=>(
+              <div key={key} className="row" style={{gap:8}}>
+                <span style={{fontSize:12,color:"var(--text2)",minWidth:148}}>{label}</span>
+                <input type="number" value={d[key]} onChange={e=>onField(key,p0(e.target.value))} style={{width:72}} />
+              </div>
+            ))}
+          </div>
+          <div className="row" style={{marginTop:12,gap:20}}>
+            <div className="row" style={{gap:6}}>
+              <span style={{fontSize:12,color:"var(--text3)"}}>Invalid:</span>
+              <input type="number" value={d.invalidDocs} onChange={e=>onField("invalidDocs",p0(e.target.value))} style={{width:64}} />
+            </div>
+            <div className="row" style={{gap:6}}>
+              <span style={{fontSize:12,color:"var(--text3)"}}>Do not process:</span>
+              <input type="number" value={d.doNotProcess} onChange={e=>onField("doNotProcess",p0(e.target.value))} style={{width:64}} />
+            </div>
+            <span style={{fontSize:12,color:"var(--text3)"}}>Total: <strong style={{color:"var(--text)"}}>{total.toLocaleString()}</strong></span>
+          </div>
+          <hr className="divider" style={{margin:"16px 0"}} />
+          <div className="row" style={{gap:24}}>
+            <div><div className="field-label">Implied rate</div><strong style={{fontSize:15}}>{impliedRate.toFixed(1)}</strong><span style={{fontSize:11,color:"var(--text3)"}}> d/FTE/d</span></div>
+            <div><div className="field-label">Observed throughput</div><strong style={{fontSize:15}}>{thru>0?thru.toFixed(1):"—"}</strong>{thru>0&&<span style={{fontSize:11,color:"var(--text3)"}}> d/FTE/d</span>}</div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ── Main app ─────────────────────────────────────────────────────────────────
+function App() {
+  const TODAY = new Date(); TODAY.setHours(0,0,0,0);
+
+  const [tab,        setTab]        = useState("present");
+  const [fteRate,    setFteRate]    = useState(1950);
+  const [ncFteRate,  setNcFteRate]  = useState(2100);
+  const [weeks,      setWeeks]      = useState(INIT_WEEKS);
+  const [invoices,   setInvoices]   = useState({});
+  const [cdata,      setCdata]      = useState(clientDefaults());
+  const [pipeline,   setPipeline]   = useState(CLIENTS.map(()=>0));
+  const [newClients, setNewClients] = useState([]);
+  const [ncRate,     setNcRate]     = useState(5);
+  const [rev,        setRev]        = useState({});
+  const [copyLabel,  setCopyLabel]  = useState("Export to Sheets");
+
+  const derived = CLIENTS.map((c,i) => {
+    const d = cdata[i]??clientDefaults()[i];
+    const total    = d.masterLease+d.masterAgreement+d.amendment+d.notice+d.commencementLetter;
+    const proc     = Math.max(0,total-d.invalidDocs-d.doNotProcess);
+    const initRem  = 1-c.pct/100;
+    const curRem   = Math.max(0,1-d.pct/100);
+    const docScale = c.docs>0?proc/c.docs:1;
+    const fteDays  = initRem>0?c.initFteDays*(curRem/initRem)*docScale:0;
+    const impliedRate = initRem>0&&c.initFteDays>0?(c.docs*initRem)/c.initFteDays:0;
+    const wkLeft   = workDaysUntil(TODAY,c.base);
+    const reqFTEs  = wkLeft>0&&fteDays>0?fteDays/wkLeft:0;
+    const eta      = fteDays>0?addWorkDays(TODAY,fteDays/Math.max(1,d.ftes)):new Date(TODAY);
+    const delta    = Math.round((eta.getTime()-c.base.getTime())/86400000);
+    const wkdWkd   = weeks.reduce((s,w)=>s+(w.ftes[i]??0)*5,0);
+    const docsDone = proc*(d.pct/100);
+    const thru     = wkdWkd>0?docsDone/wkdWkd:0;
+    const remMos   = d.ftes>0?(fteDays/d.ftes)/22:0;
+    const remSpend = remMos*d.ftes*fteRate;
+    const revenue  = d.docsets*(rev[c.name]??0);
+    const profit   = revenue-remSpend;
+    const margin   = revenue>0?profit/revenue:0;
+    return {d,total,proc,fteDays,impliedRate,wkLeft,reqFTEs,eta,delta,wkdWkd,docsDone,thru,remMos,remSpend,revenue,profit,margin};
+  });
+
+  function normNC(raw) {
+    return {
+      id: raw.id??String(Date.now()), name: raw.name??"New Client",
+      leases: raw.leases??0, hoursPerLease: raw.hoursPerLease??0,
+      days: raw.days??90, startDate: raw.startDate??"",
+      fteRate: raw.fteRate??ncFteRate,
+    };
+  }
+
+  function calcNC(nc) {
+    const effectiveRate = nc.hoursPerLease>0?8/nc.hoursPerLease:ncRate;
+    const workDays    = calToWork(Math.max(1,nc.days));
+    const ftes        = workDays>0&&nc.leases>0?Math.ceil(nc.leases/(effectiveRate*workDays)):0;
+    const startRaw    = nc.startDate?new Date(nc.startDate+"T00:00:00"):new Date(TODAY);
+    const eta         = ftes>0?addWorkDays(startRaw,workDays):new Date(startRaw);
+    const months      = workDays/22;
+    const monthlyCost = ftes*nc.fteRate;
+    const totalCost   = monthlyCost*months;
+    const docsets     = nc.leases>0?Math.max(1,Math.round(nc.leases/30)):0;
+    const revenue     = docsets*(rev[nc.id]??0);
+    const profit      = revenue-totalCost;
+    const margin      = revenue>0?profit/revenue:0;
+    return {ftes,eta,startRaw,months,monthlyCost,totalCost,effectiveRate,workDays,docsets,revenue,profit,margin};
+  }
+
+  const normClients  = newClients.map(normNC);
+  const totalFTEs    = cdata.reduce((s,d)=>s+d.ftes,0);
+  const wkCostPerFTE = fteRate/4.33;
+  const monthKeys    = [...new Set(weeks.map(w=>w.monthKey))];
+  const totalNewFTEs = normClients.reduce((s,nc)=>s+calcNC(nc).ftes,0);
+
+  const setField   = (i,f,v) => setCdata(p=>p.map((c,idx)=>idx===i?{...c,[f]:v}:c));
+  const setWkFTE   = (wi,ci,v) => setWeeks(p=>p.map((w,idx)=>{if(idx!==wi)return w;const f=[...w.ftes];f[ci]=v;return{...w,ftes:f};}));
+  const addWeek    = () => setWeeks(p=>[...p,nextWeekInfo(p)]);
+  const setPipeDoc = (i,v) => setPipeline(p=>p.map((x,idx)=>idx===i?v:x));
+  const addNC      = () => setNewClients(p=>[...p,{id:String(Date.now()),name:"New Client",leases:0,hoursPerLease:0,days:90,startDate:"",fteRate:ncFteRate}]);
+  const updNC      = (id,patch) => setNewClients(p=>p.map(n=>n.id===id?{...n,...patch}:n));
+  const delNC      = id => setNewClients(p=>p.filter(n=>n.id!==id));
+  const setRevenue = (k,v) => setRev(p=>({...p,[k]:v}));
+
+  function copyForSheets() {
+    const rows=["RESOURCE CALCULATOR","Generated: "+new Date().toLocaleDateString(),""];
+    rows.push("Client\t% Complete\tFTEs\tETA\tvs Baseline\tRem. Spend");
+    CLIENTS.forEach((c,i)=>{const dr=derived[i];rows.push([c.name,dr.d.pct+"%",dr.d.ftes,fmtDate(dr.eta),dr.delta===0?"On time":dr.delta>0?`+${dr.delta}d late`:`${Math.abs(dr.delta)}d early`,Math.round(dr.remSpend)].join("\t"));});
+    navigator.clipboard.writeText(rows.join("\n")).then(()=>{setCopyLabel("Copied!");setTimeout(()=>setCopyLabel("Export to Sheets"),2500);});
+  }
+
+  const tabs = [
+    {id:"past",    label:"Past",    sub:"Invoices"},
+    {id:"present", label:"Present", sub:"Throughput"},
+    {id:"future",  label:"Future",  sub:"Forecast"},
+    {id:"pnl",     label:"P&L",    sub:"Margins"},
+  ];
+
+  return (
+    <div className="app">
+      {/* Sidebar */}
+      <nav className="sidebar">
+        <div className="sidebar-brand">
+          <h1>Resource<br/>Calculator</h1>
+          <p>Adams Bridge</p>
+        </div>
+
+        <div className="nav-label">Views</div>
+        <div className="nav-section">
+          {tabs.map(t=>(
+            <button key={t.id} className={`nav-item${tab===t.id?" active":""}`} onClick={()=>setTab(t.id)}>
+              <span className="dot" />
+              <span>{t.label}</span>
+              <span style={{fontSize:11,color:"var(--text3)",marginLeft:"auto"}}>{t.sub}</span>
+            </button>
+          ))}
+        </div>
+
+        <div className="sidebar-footer">
+          <div className="rate-group" style={{flexDirection:"column",alignItems:"flex-start",gap:4,marginBottom:12}}>
+            <label>Existing FTE rate / mo</label>
+            <input type="number" value={fteRate} onChange={e=>setFteRate(Math.max(1,p0(e.target.value)||1950))} style={{width:"100%"}} />
+          </div>
+          <div className="rate-group" style={{flexDirection:"column",alignItems:"flex-start",gap:4,marginBottom:16}}>
+            <label>New client rate / mo</label>
+            <input type="number" value={ncFteRate} onChange={e=>setNcFteRate(Math.max(1,p0(e.target.value)||2100))} style={{width:"100%"}} />
+          </div>
+          <button className="btn btn-primary" onClick={copyForSheets} style={{width:"100%",justifyContent:"center"}}>
+            {copyLabel}
+          </button>
+        </div>
+      </nav>
+
+      {/* Main content */}
+      <main className="main">
+
+        {/* ── PAST ── */}
+        {tab==="past" && (
+          <>
+            <div className="page-header">
+              <div>
+                <div className="page-title">Past · Invoices</div>
+                <div className="page-sub">Weekly FTE deployment and invoice reconciliation</div>
+              </div>
+            </div>
+
+            {(()=>{
+              const spend=weeks.reduce((s,w)=>s+w.ftes.reduce((a,b)=>a+b,0)*wkCostPerFTE,0);
+              const invoiced=Object.values(invoices).reduce((a,b)=>a+b,0);
+              const avg=weeks.length>0?weeks.reduce((s,w)=>s+w.ftes.reduce((a,b)=>a+b,0),0)/weeks.length:0;
+              return (
+                <div className="stat-row">
+                  <Stat value={fmtMoney(spend)} label="Expected spend to date" />
+                  <Stat value={fmtMoney(invoiced)} label="Total invoiced" tone={invoiced>=spend?"green":"amber"} />
+                  <Stat value={avg.toFixed(1)} label="Avg FTEs / week" />
+                </div>
+              );
+            })()}
+
+            <div className="section">
+              <div className="section-title">Weekly FTE Deployment</div>
+              <div className="table-card">
+                <div className="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Week of</th>
+                        {CLIENTS.map(c=><th key={c.short} className="r">{c.short}</th>)}
+                        <th className="r">Total</th>
+                        <th className="r">Wk cost</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {weeks.map((w,wi)=>{
+                        const tot=w.ftes.reduce((a,b)=>a+b,0);
+                        return (
+                          <tr key={wi}>
+                            <td className="muted">{w.label}</td>
+                            {CLIENTS.map((_,ci)=>(
+                              <td key={ci} className="r">
+                                <input type="number" className="week-input" value={w.ftes[ci]??0} onChange={e=>setWkFTE(wi,ci,p0(e.target.value))} />
+                              </td>
+                            ))}
+                            <td className="r bold">{tot}</td>
+                            <td className="r muted">{fmtMoney(tot*wkCostPerFTE)}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              <button className="btn btn-ghost" onClick={addWeek} style={{marginTop:10,fontSize:12}}>+ Add week</button>
+            </div>
+
+            <div className="section">
+              <div className="section-title">Invoice Verification</div>
+              <div className="table-card">
+                <div className="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Month</th>
+                        <th className="r">Expected</th>
+                        <th className="r">Received</th>
+                        <th className="r">Variance</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {monthKeys.map(mk=>{
+                        const mw=weeks.filter(w=>w.monthKey===mk);
+                        const exp=Math.round(mw.reduce((s,w)=>s+w.ftes.reduce((a,b)=>a+b,0)*wkCostPerFTE,0));
+                        const rec=invoices[mk]??0;
+                        const diff=rec-exp;
+                        return (
+                          <tr key={mk}>
+                            <td>{mlabel(mk)}</td>
+                            <td className="r muted">{fmtMoney(exp)}</td>
+                            <td className="r">
+                              <input type="number" value={rec>0?rec:""} onChange={e=>setInvoices(p=>({...p,[mk]:p0(e.target.value)}))} placeholder="—" style={{width:88}} />
+                            </td>
+                            <td className={`r ${rec>0?(diff>=0?"green":"red"):""}`}>{rec>0?fmtMoney(diff):"—"}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* ── PRESENT ── */}
+        {tab==="present" && (
+          <>
+            <div className="page-header">
+              <div>
+                <div className="page-title">Present · Throughput</div>
+                <div className="page-sub">Current status across active clients</div>
+              </div>
+            </div>
+
+            <div className="stat-row">
+              <Stat value={totalFTEs} label="Total FTEs deployed" tone={totalFTEs>15?"amber":undefined} />
+              <Stat value={`${CLIENTS.filter((_,i)=>derived[i].d.pct>=100).length}/${CLIENTS.length}`} label="Clients complete" />
+              <Stat value={fmtMoney(derived.reduce((s,d)=>s+d.remSpend,0))} label="Remaining spend" />
+            </div>
+
+            <div className="section">
+              <div className="section-title">Client Status</div>
+              {CLIENTS.map((c,i)=>(
+                <ClientCard
+                  key={c.name}
+                  client={c}
+                  d={cdata[i]??clientDefaults()[i]}
+                  derived={derived[i]}
+                  onField={(f,v)=>setField(i,f,v)}
+                />
+              ))}
+            </div>
+          </>
+        )}
+
+        {/* ── FUTURE ── */}
+        {tab==="future" && (
+          <>
+            <div className="page-header">
+              <div>
+                <div className="page-title">Future · Forecast</div>
+                <div className="page-sub">Completion projections and new client modeling</div>
+              </div>
+            </div>
+
+            {(()=>{
+              const totalRem=derived.reduce((s,d)=>s+d.remSpend,0);
+              const addlFTEs=Math.max(0,Math.ceil(derived.reduce((s,d)=>s+(d.reqFTEs>d.d.ftes?d.reqFTEs-d.d.ftes:0),0)));
+              const atRisk=CLIENTS.filter((_,i)=>derived[i].delta>0).length;
+              return (
+                <div className="stat-row">
+                  <Stat value={fmtMoney(totalRem)} label="Total remaining spend" />
+                  <Stat value={addlFTEs>0?`+${addlFTEs}`:"None needed"} label="Extra FTEs to hit baseline" tone={addlFTEs>0?"red":"green"} />
+                  <Stat value={`${atRisk} / ${CLIENTS.length}`} label="Clients behind baseline" tone={atRisk>0?"amber":undefined} />
+                </div>
+              );
+            })()}
+
+            <div className="section">
+              <div className="section-title">Completion Forecast</div>
+              <div className="table-card">
+                <div className="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Client</th>
+                        <th>ETA</th>
+                        <th>vs Baseline</th>
+                        <th className="r">Days left</th>
+                        <th className="r">Req. FTEs</th>
+                        <th className="r">Current</th>
+                        <th className="r">Gap</th>
+                        <th className="r">Rate</th>
+                        <th className="r">Rem. spend</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {CLIENTS.map((c,i)=>{
+                        const {d,reqFTEs,delta,eta,proc,remSpend,wkLeft,impliedRate}=derived[i];
+                        const req=proc>0?Math.ceil(reqFTEs):0; const gap=req-d.ftes;
+                        const tone=delta>7||gap>3?"red":delta>0||gap>0?"amber":"";
+                        return (
+                          <tr key={c.name}>
+                            <td className="bold">{c.name}</td>
+                            <td>{fmtDate(eta)}</td>
+                            <td className={tone}>{delta===0?"On time":delta>0?`+${delta}d late`:`${Math.abs(delta)}d early`}</td>
+                            <td className="r muted">{wkLeft}</td>
+                            <td className="r">{proc>0?req:"—"}</td>
+                            <td className="r">{d.ftes}</td>
+                            <td className={`r ${gap>0?"red":gap<0?"green":""}`}>{gap>0?`+${gap}`:gap<0?gap:"—"}</td>
+                            <td className="r muted">{impliedRate.toFixed(1)}</td>
+                            <td className="r">{fmtMoney(remSpend)}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <div className="section">
+              <div className="section-title">Pipeline — Additional Docs</div>
+              <div className="table-card">
+                <div className="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Client</th>
+                        <th className="r">+ Docs</th>
+                        <th className="r">New total</th>
+                        <th className="r">FTEs req.</th>
+                        <th>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {CLIENTS.map((c,i)=>{
+                        const ex=pipeline[i]??0;
+                        const {proc,d,wkLeft}=derived[i];
+                        const initRem=1-c.pct/100; const curRem=Math.max(0,1-d.pct/100);
+                        const baseRatio=initRem>0?curRem/initRem:0;
+                        const docScale=c.docs>0?(proc+ex)/c.docs:1;
+                        const newFteDays=c.initFteDays*baseRatio*docScale;
+                        const newReq=wkLeft>0?Math.ceil(newFteDays/wkLeft):0;
+                        const addl=Math.max(0,newReq-d.ftes);
+                        return (
+                          <tr key={c.name}>
+                            <td>{c.name}</td>
+                            <td className="r"><input type="number" value={ex>0?ex:""} onChange={e=>setPipeDoc(i,p0(e.target.value))} placeholder="0" style={{width:72}} /></td>
+                            <td className="r muted">{ex>0?(proc+ex).toLocaleString():"—"}</td>
+                            <td className="r">{ex>0?newReq:"—"}</td>
+                            <td>{ex>0?(addl>0?<Badge tone="amber">+{addl} FTEs needed</Badge>:<Badge tone="green">Sufficient</Badge>):"—"}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <div className="section">
+              <div className="row" style={{marginBottom:12,gap:12}}>
+                <div className="section-title" style={{margin:0}}>New Clients</div>
+                <div className="spacer" />
+                <div className="row" style={{gap:8}}>
+                  <span style={{fontSize:11,color:"var(--text3)"}}>Default rate:</span>
+                  <input type="number" value={ncRate} onChange={e=>setNcRate(pf(e.target.value,5))} style={{width:52}} />
+                  <span style={{fontSize:11,color:"var(--text3)"}}>docs/FTE/day</span>
+                  <button className="btn btn-ghost" onClick={addNC}>+ Add client</button>
+                </div>
+              </div>
+
+              {normClients.length===0 ? (
+                <div style={{padding:"28px 20px",textAlign:"center",color:"var(--text3)",fontSize:13,background:"var(--surface)",border:"1px solid var(--border)",borderRadius:12}}>
+                  No new clients yet — click "+ Add client" to model resource needs
+                </div>
+              ) : (
+                <div className="table-card" style={{overflowX:"auto"}}>
+                  <div className="nc-header">
+                    <span style={{textAlign:"left"}}>Client</span>
+                    <span>Leases</span>
+                    <span>Hrs/lease</span>
+                    <span>Days</span>
+                    <span>Start date</span>
+                    <span>$/FTE/mo</span>
+                    <span>FTEs</span>
+                    <span>Done by</span>
+                    <span>$/month</span>
+                    <span>Total $</span>
+                    <span></span>
+                  </div>
+                  <div style={{borderTop:"1px solid var(--border)"}} />
+                  {normClients.map((nc,ri)=>{
+                    const calc=calcNC(nc); const ready=nc.leases>0&&nc.days>0;
+                    return (
+                      <div key={nc.id} className="nc-grid" style={{background:ri%2===1?"var(--bg)":"var(--surface)",borderBottom:"1px solid var(--border)"}}>
+                        <input value={nc.name} onChange={e=>updNC(nc.id,{name:e.target.value})} style={{fontWeight:500,textAlign:"left"}} />
+                        <input type="number" value={nc.leases>0?nc.leases:""} onChange={e=>updNC(nc.id,{leases:p0(e.target.value)})} placeholder="e.g. 100" />
+                        <input type="number" value={nc.hoursPerLease>0?nc.hoursPerLease:""} onChange={e=>updNC(nc.id,{hoursPerLease:pf(e.target.value,0)})} placeholder="—" />
+                        <input type="number" value={nc.days>0?nc.days:""} onChange={e=>updNC(nc.id,{days:p0(e.target.value)})} placeholder="90" />
+                        <input type="date" value={nc.startDate} onChange={e=>updNC(nc.id,{startDate:e.target.value})} style={{fontSize:12,textAlign:"left"}} />
+                        <input type="number" value={nc.fteRate>0?nc.fteRate:""} onChange={e=>updNC(nc.id,{fteRate:p0(e.target.value)||ncFteRate})} placeholder={String(ncFteRate)} />
+                        <div style={{textAlign:"right",fontFamily:"'Instrument Serif',serif",fontSize:ready?22:14,color:ready?"var(--text)":"var(--text3)"}}>{ready?calc.ftes:"—"}</div>
+                        <div style={{textAlign:"right",fontSize:12,color:ready?"var(--text2)":"var(--text3)"}}>{ready?fmtDate(calc.eta):"—"}</div>
+                        <div style={{textAlign:"right",fontSize:12,color:ready?"var(--text)":"var(--text3)",fontWeight:ready?500:400}}>{ready?fmtMoney(calc.monthlyCost):"—"}</div>
+                        <div style={{textAlign:"right",fontSize:12,color:ready?"var(--text)":"var(--text3)",fontWeight:ready?500:400}}>{ready?fmtMoney(calc.totalCost):"—"}</div>
+                        <button onClick={()=>delNC(nc.id)} style={{background:"none",border:"none",color:"var(--text3)",cursor:"pointer",fontSize:16,padding:0,lineHeight:1}}>×</button>
+                      </div>
+                    );
+                  })}
+                  {normClients.some(nc=>nc.leases>0)&&(
+                    <div style={{padding:"14px 16px",borderTop:"1px solid var(--border)",background:"var(--surface)"}}>
+                      <div className="stat-row cols-4" style={{marginBottom:0}}>
+                        <Stat value={totalFTEs} label="Existing FTEs" />
+                        <Stat value={totalNewFTEs} label="New client FTEs" tone="amber" />
+                        <Stat value={totalFTEs+totalNewFTEs} label="Total FTEs" tone={totalFTEs+totalNewFTEs>15?"red":"green"} />
+                        <Stat value={fmtMoney(normClients.reduce((s,nc)=>s+calcNC(nc).monthlyCost,0))} label="New client spend/mo" />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </>
+        )}
+
+        {/* ── P&L ── */}
+        {tab==="pnl" && (
+          <>
+            <div className="page-header">
+              <div>
+                <div className="page-title">P&L · Margins</div>
+                <div className="page-sub">Revenue, cost, and gross profit per client</div>
+              </div>
+            </div>
+
+            <div className="section">
+              <div className="section-title">Existing Clients — {fmtMoney(fteRate)}/FTE/mo</div>
+              <div className="table-card">
+                <div className="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Client</th>
+                        <th className="r">Docsets</th>
+                        <th className="r">$/Docset</th>
+                        <th className="r">Revenue</th>
+                        <th className="r">Cost</th>
+                        <th className="r">Gross profit</th>
+                        <th className="r">Margin</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {CLIENTS.map((c,i)=>{
+                        const {d,remSpend,profit,revenue,margin}=derived[i]; const pd=rev[c.name]??0;
+                        return (
+                          <tr key={c.name}>
+                            <td className="bold">{c.name}</td>
+                            <td className="r muted">{d.docsets}</td>
+                            <td className="r"><input type="number" value={pd>0?pd:""} onChange={e=>setRevenue(c.name,p0(e.target.value))} placeholder="0" style={{width:80}} /></td>
+                            <td className="r">{revenue>0?fmtMoney(revenue):"—"}</td>
+                            <td className="r muted">{fmtMoney(remSpend)}</td>
+                            <td className={`r bold ${revenue>0?(profit>0?"green":"red"):""}`}>{revenue>0?fmtMoney(profit):"—"}</td>
+                            <td className={`r ${revenue>0?(margin>0.3?"green":margin>0?"amber":"red"):""}`}>{revenue>0?fmtPct(margin):"—"}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {(()=>{
+                const totRev=derived.reduce((s,d)=>s+d.revenue,0);
+                const totCost=derived.reduce((s,d)=>s+d.remSpend,0);
+                const totProf=totRev-totCost; const totMarg=totRev>0?totProf/totRev:0;
+                return (
+                  <div className="stat-row cols-4" style={{marginTop:12}}>
+                    <Stat value={totRev>0?fmtMoney(totRev):"—"} label="Total revenue" />
+                    <Stat value={fmtMoney(totCost)} label="Total cost" />
+                    <Stat value={totRev>0?fmtMoney(totProf):"—"} label="Gross profit" tone={totProf>0?"green":totRev>0?"red":undefined} />
+                    <Stat value={totRev>0?fmtPct(totMarg):"—"} label="Margin" tone={totMarg>0.3?"green":totMarg>0?"amber":totRev>0?"red":undefined} />
+                  </div>
+                );
+              })()}
+            </div>
+
+            {normClients.length>0&&(
+              <div className="section">
+                <div className="section-title">New Clients</div>
+                <div className="table-card">
+                  <div className="table-wrap">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Client</th>
+                          <th className="r">Docsets</th>
+                          <th className="r">$/Docset</th>
+                          <th className="r">Revenue</th>
+                          <th className="r">Cost</th>
+                          <th className="r">Gross profit</th>
+                          <th className="r">Margin</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {normClients.map(nc=>{
+                          const calc=calcNC(nc); const pd=rev[nc.id]??0;
+                          return (
+                            <tr key={nc.id}>
+                              <td className="bold">{nc.name}</td>
+                              <td className="r muted">~{calc.docsets}</td>
+                              <td className="r"><input type="number" value={pd>0?pd:""} onChange={e=>setRevenue(nc.id,p0(e.target.value))} placeholder="0" style={{width:80}} /></td>
+                              <td className="r">{calc.revenue>0?fmtMoney(calc.revenue):"—"}</td>
+                              <td className="r muted">{fmtMoney(calc.totalCost)}</td>
+                              <td className={`r bold ${calc.revenue>0?(calc.profit>0?"green":"red"):""}`}>{calc.revenue>0?fmtMoney(calc.profit):"—"}</td>
+                              <td className={`r ${calc.revenue>0?(calc.margin>0.3?"green":calc.margin>0?"amber":"red"):""}`}>{calc.revenue>0?fmtPct(calc.margin):"—"}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
+      </main>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
