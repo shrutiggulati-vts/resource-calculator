@@ -566,8 +566,10 @@ function App() {
   const [ncRate,     setNcRate]     = useState(()=>{ const s=loadStored(); return s.ncRate??5; });
   const [rev,        setRev]        = useState(()=>{ const s=loadStored(); return s.rev??{}; });
   const [copyLabel,  setCopyLabel]  = useState("Export to Sheets");
+  const [auditLog,   setAuditLog]   = useState(()=>{ const s=loadStored(); return s.auditLog??[]; });
+  const [auditFilter,setAuditFilter]= useState("All");
 
-  useEffect(()=>{ try { localStorage.setItem(LS_KEY, JSON.stringify({tab,fteRate,ncFteRate,weeks,invoices,cdata,pipeline,newClients,ncRate,rev})); } catch(_){} }, [tab,fteRate,ncFteRate,weeks,invoices,cdata,pipeline,newClients,ncRate,rev]);
+  useEffect(()=>{ try { localStorage.setItem(LS_KEY, JSON.stringify({tab,fteRate,ncFteRate,weeks,invoices,cdata,pipeline,newClients,ncRate,rev,auditLog})); } catch(_){} }, [tab,fteRate,ncFteRate,weeks,invoices,cdata,pipeline,newClients,ncRate,rev,auditLog]);
 
   const derived = CLIENTS.map((c,i) => {
     const d = cdata[i]??clientDefaults()[i];
@@ -624,14 +626,22 @@ function App() {
   const monthKeys    = [...new Set(weeks.map(w=>w.monthKey))];
   const totalNewFTEs = normClients.reduce((s,nc)=>s+calcNC(nc).ftes,0);
 
-  const setField   = (i,f,v) => setCdata(p=>p.map((c,idx)=>idx===i?{...c,[f]:v}:c));
-  const setWkFTE   = (wi,ci,v) => setWeeks(p=>p.map((w,idx)=>{if(idx!==wi)return w;const f=[...w.ftes];f[ci]=v;return{...w,ftes:f};}));
-  const addWeek    = () => setWeeks(p=>[...p,nextWeekInfo(p, CLIENTS.map((_,i)=>cdata[i]?.ftes??0))]);
-  const setPipeDoc = (i,v) => setPipeline(p=>p.map((x,idx)=>idx===i?v:x));
-  const addNC      = () => setNewClients(p=>[...p,{id:String(Date.now()),name:"New Client",leases:0,hoursPerLease:0,days:90,startDate:"",fteRate:ncFteRate}]);
-  const updNC      = (id,patch) => setNewClients(p=>p.map(n=>n.id===id?{...n,...patch}:n));
-  const delNC      = id => setNewClients(p=>p.filter(n=>n.id!==id));
-  const setRevenue = (k,v) => setRev(p=>({...p,[k]:v}));
+  const logEdit = (view, target, field, from, to) => {
+    if (from === to) return;
+    const f = from===undefined||from===null||from===""?"—":from;
+    const t = to===undefined||to===null||to===""?"—":to;
+    setAuditLog(p => [{ts: Date.now(), view, target, field, from: f, to: t}, ...p].slice(0, 500));
+  };
+
+  const setField   = (i,f,v) => { logEdit("Present", CLIENTS[i].name, f, cdata[i]?.[f], v); setCdata(p=>p.map((c,idx)=>idx===i?{...c,[f]:v}:c)); };
+  const setWkFTE   = (wi,ci,v) => { logEdit("Past", `${weeks[wi]?.label} · ${CLIENTS[ci].short}`, "FTEs", weeks[wi]?.ftes[ci], v); setWeeks(p=>p.map((w,idx)=>{if(idx!==wi)return w;const f=[...w.ftes];f[ci]=v;return{...w,ftes:f};})); };
+  const addWeek    = () => { const nw=nextWeekInfo(weeks, CLIENTS.map((_,i)=>cdata[i]?.ftes??0)); logEdit("Past", "—", "Week added", "—", nw.label); setWeeks(p=>[...p,nw]); };
+  const setPipeDoc = (i,v) => { logEdit("Future", CLIENTS[i].name, "Pipeline +docs", pipeline[i], v); setPipeline(p=>p.map((x,idx)=>idx===i?v:x)); };
+  const addNC      = () => { logEdit("Future", "—", "Client added", "—", "New Client"); setNewClients(p=>[...p,{id:String(Date.now()),name:"New Client",leases:0,hoursPerLease:0,days:90,startDate:"",fteRate:ncFteRate}]); };
+  const updNC      = (id,patch) => { const cur=newClients.find(n=>n.id===id); Object.keys(patch).forEach(k=>logEdit("Future", cur?.name??id, k, cur?.[k], patch[k])); setNewClients(p=>p.map(n=>n.id===id?{...n,...patch}:n)); };
+  const delNC      = id => { const nm=newClients.find(n=>n.id===id)?.name??id; logEdit("Future", nm, "Client removed", "present", "—"); setNewClients(p=>p.filter(n=>n.id!==id)); };
+  const setRevenue = (k,v) => { const nm=CLIENTS.find(c=>c.name===k)?.name??(newClients.find(n=>n.id===k)?.name??k); logEdit("P&L", nm, "$/Docset", rev[k], v); setRev(p=>({...p,[k]:v})); };
+  const setInvoice = (mk,v) => { logEdit("Past", mlabel(mk), "Invoice received", invoices[mk], v); setInvoices(p=>({...p,[mk]:v})); };
 
   function copyForSheets() {
     const rows=["RESOURCE CALCULATOR","Generated: "+new Date().toLocaleDateString(),""];
@@ -645,6 +655,7 @@ function App() {
     {id:"present", label:"Present", sub:"Throughput"},
     {id:"future",  label:"Future",  sub:"Forecast"},
     {id:"pnl",     label:"P&L",    sub:"Margins"},
+    {id:"audit",   label:"Audit",   sub:"Trail"},
   ];
 
   return (
@@ -670,11 +681,11 @@ function App() {
         <div className="sidebar-footer">
           <div className="rate-group" style={{flexDirection:"column",alignItems:"flex-start",gap:4,marginBottom:12}}>
             <label>Existing FTE rate / mo</label>
-            <input type="number" value={fteRate} onChange={e=>setFteRate(Math.max(1,p0(e.target.value)||1950))} style={{width:"100%"}} />
+            <input type="number" value={fteRate} onChange={e=>{ const nv=Math.max(1,p0(e.target.value)||1950); logEdit("Settings","—","Existing FTE rate",fteRate,nv); setFteRate(nv); }} style={{width:"100%"}} />
           </div>
           <div className="rate-group" style={{flexDirection:"column",alignItems:"flex-start",gap:4,marginBottom:16}}>
             <label>New client rate / mo</label>
-            <input type="number" value={ncFteRate} onChange={e=>setNcFteRate(Math.max(1,p0(e.target.value)||2100))} style={{width:"100%"}} />
+            <input type="number" value={ncFteRate} onChange={e=>{ const nv=Math.max(1,p0(e.target.value)||2100); logEdit("Settings","—","New client rate",ncFteRate,nv); setNcFteRate(nv); }} style={{width:"100%"}} />
           </div>
           <button className="btn btn-primary" onClick={copyForSheets} style={{width:"100%",justifyContent:"center"}}>
             {copyLabel}
@@ -768,7 +779,7 @@ function App() {
                             <td>{mlabel(mk)}</td>
                             <td className="r muted">{fmtMoney(exp)}</td>
                             <td className="r">
-                              <input type="number" value={rec>0?rec:""} onChange={e=>setInvoices(p=>({...p,[mk]:p0(e.target.value)}))} placeholder="—" style={{width:88}} />
+                              <input type="number" value={rec>0?rec:""} onChange={e=>setInvoice(mk,p0(e.target.value))} placeholder="—" style={{width:88}} />
                             </td>
                             <td className={`r ${rec>0?(diff>=0?"green":"red"):""}`}>{rec>0?fmtMoney(diff):"—"}</td>
                           </tr>
@@ -925,7 +936,7 @@ function App() {
                 <div className="spacer" />
                 <div className="row" style={{gap:8}}>
                   <span style={{fontSize:11,color:"var(--text3)"}}>Default rate:</span>
-                  <input type="number" value={ncRate} onChange={e=>setNcRate(pf(e.target.value,5))} style={{width:52}} />
+                  <input type="number" value={ncRate} onChange={e=>{ const nv=pf(e.target.value,5); logEdit("Settings","—","Default docs/FTE/day",ncRate,nv); setNcRate(nv); }} style={{width:52}} />
                   <span style={{fontSize:11,color:"var(--text3)"}}>docs/FTE/day</span>
                   <button className="btn btn-ghost" onClick={addNC}>+ Add client</button>
                 </div>
@@ -1084,6 +1095,67 @@ function App() {
                 </div>
               </div>
             )}
+          </>
+        )}
+
+        {/* ── AUDIT ── */}
+        {tab==="audit" && (
+          <>
+            <div className="page-header">
+              <div>
+                <div className="page-title">Audit · Trail</div>
+                <div className="page-sub">Every edit, most recent first</div>
+              </div>
+            </div>
+
+            <div className="row" style={{marginBottom:20}}>
+              <select value={auditFilter} onChange={e=>setAuditFilter(e.target.value)} style={{background:"var(--bg)",border:"1px solid var(--border)",borderRadius:6,padding:"5px 8px",font:"inherit",color:"var(--text)",cursor:"pointer"}}>
+                {["All","Present","Past","Future","P&L","Settings"].map(v=><option key={v} value={v}>{v}</option>)}
+              </select>
+              <div className="spacer" />
+              <button className="btn btn-ghost" onClick={()=>{ if(window.confirm("Clear the entire audit trail?")) setAuditLog([]); }}>Clear log</button>
+            </div>
+
+            {(()=>{
+              const rows=auditLog.filter(e=>auditFilter==="All"||e.view===auditFilter);
+              if(rows.length===0) return (
+                <div style={{padding:"28px 20px",textAlign:"center",color:"var(--text3)",fontSize:13,background:"var(--surface)",border:"1px solid var(--border)",borderRadius:12}}>
+                  {auditFilter==="All"?"No edits recorded yet.":"No edits for this filter."}
+                </div>
+              );
+              return (
+                <div className="section">
+                  <div className="table-card">
+                    <div className="table-wrap">
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>Time</th>
+                            <th>View</th>
+                            <th>Target</th>
+                            <th>Field</th>
+                            <th className="r">From</th>
+                            <th className="r">To</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {rows.map((e,idx)=>(
+                            <tr key={e.ts+"-"+idx}>
+                              <td className="muted" style={{fontSize:12}}>{new Date(e.ts).toLocaleString()}</td>
+                              <td>{e.view}</td>
+                              <td className={e.target==="—"?"muted":""}>{e.target}</td>
+                              <td>{e.field}</td>
+                              <td className="r muted">{String(e.from)}</td>
+                              <td className="r">{String(e.to)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
           </>
         )}
 
