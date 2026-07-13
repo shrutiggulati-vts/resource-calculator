@@ -132,7 +132,9 @@
       flex: 1;
       min-width: 0;
       padding: 40px 48px;
-      max-width: 1000px;
+      width: 100%;
+      max-width: 1800px;
+      margin: 0 auto;
     }
 
     /* ── Page header ── */
@@ -355,7 +357,7 @@
     /* ── New client row grid ── */
     .nc-grid {
       display: grid;
-      grid-template-columns: 140px 68px 68px 72px 108px 72px 60px 100px 80px 82px 28px;
+      grid-template-columns: minmax(140px,1.6fr) repeat(9, minmax(60px,1fr)) 28px;
       gap: 0 8px;
       align-items: center;
       padding: 8px 16px;
@@ -369,7 +371,7 @@
       letter-spacing: 0.03em;
       padding: 0 16px 8px;
       display: grid;
-      grid-template-columns: 140px 68px 68px 72px 108px 72px 60px 100px 80px 82px 28px;
+      grid-template-columns: minmax(140px,1.6fr) repeat(9, minmax(60px,1fr)) 28px;
       gap: 0 8px;
     }
 
@@ -387,6 +389,10 @@
     .rate-group label { font-size: 11px; color: var(--text3); white-space: nowrap; }
     .rate-group input { width: 72px; }
 
+    @media (max-width: 1100px) {
+      .main { padding: 32px 28px; }
+    }
+
     @media (max-width: 768px) {
       .sidebar { display: none; }
       .main { padding: 24px 20px; }
@@ -397,7 +403,10 @@
 <div id="root"></div>
 
 <script type="text/babel">
-const { useState } = React;
+const { useState, useEffect } = React;
+
+const LS_KEY = "resourceCalculator.v1";
+function loadStored() { try { return JSON.parse(localStorage.getItem(LS_KEY)||"{}") || {}; } catch(_) { return {}; } }
 
 // ── Constants ────────────────────────────────────────────────────────────────
 const MO = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
@@ -452,14 +461,17 @@ const p0 = s => { const n=parseInt(s,10); return isNaN(n)||n<0?0:n; };
 const pf = (s,def) => { const n=parseFloat(s); return isNaN(n)||n<=0?def:n; };
 const mlabel = k => (MONTH_NAMES[k.slice(0,3)]??k.slice(0,3))+" "+k.slice(3);
 
-function nextWeekInfo(weeks) {
-  if(!weeks.length) return {label:"May 18",monthKey:"may2026",ftes:CLIENTS.map(()=>0)};
+function nextWeekInfo(weeks, seedFtes) {
+  // New weeks seed their per-client FTEs from the current Present deployment
+  // (Phase 3: Present drives Past). Already-entered weeks stay as typed.
+  const seed = seedFtes ?? CLIENTS.map(()=>0);
+  if(!weeks.length) return {label:"May 18",monthKey:"may2026",ftes:[...seed]};
   const last=weeks[weeks.length-1]; const parts=last.label.split(" ");
   const mIdx=MO.indexOf(parts[0]);
-  if(mIdx===-1) return {label:"",monthKey:last.monthKey,ftes:[...last.ftes]};
+  if(mIdx===-1) return {label:"",monthKey:last.monthKey,ftes:[...seed]};
   const next=new Date(2026,mIdx,parseInt(parts[1])+7);
   const ms=MO[next.getMonth()].toLowerCase().slice(0,3);
-  return {label:`${MO[next.getMonth()]} ${next.getDate()}`,monthKey:`${ms}${next.getFullYear()}`,ftes:[...last.ftes]};
+  return {label:`${MO[next.getMonth()]} ${next.getDate()}`,monthKey:`${ms}${next.getFullYear()}`,ftes:[...seed]};
 }
 
 // ── Stat card ────────────────────────────────────────────────────────────────
@@ -543,17 +555,19 @@ const ClientCard = ({client, d, derived, onField, defaultOpen=false}) => {
 function App() {
   const TODAY = new Date(); TODAY.setHours(0,0,0,0);
 
-  const [tab,        setTab]        = useState("present");
-  const [fteRate,    setFteRate]    = useState(1950);
-  const [ncFteRate,  setNcFteRate]  = useState(2100);
-  const [weeks,      setWeeks]      = useState(INIT_WEEKS);
-  const [invoices,   setInvoices]   = useState({});
-  const [cdata,      setCdata]      = useState(clientDefaults());
-  const [pipeline,   setPipeline]   = useState(CLIENTS.map(()=>0));
-  const [newClients, setNewClients] = useState([]);
-  const [ncRate,     setNcRate]     = useState(5);
-  const [rev,        setRev]        = useState({});
+  const [tab,        setTab]        = useState(()=>{ const s=loadStored(); return s.tab??"present"; });
+  const [fteRate,    setFteRate]    = useState(()=>{ const s=loadStored(); return s.fteRate??1950; });
+  const [ncFteRate,  setNcFteRate]  = useState(()=>{ const s=loadStored(); return s.ncFteRate??2100; });
+  const [weeks,      setWeeks]      = useState(()=>{ const s=loadStored(); return s.weeks??INIT_WEEKS; });
+  const [invoices,   setInvoices]   = useState(()=>{ const s=loadStored(); return s.invoices??{}; });
+  const [cdata,      setCdata]      = useState(()=>{ const s=loadStored(); return s.cdata??clientDefaults(); });
+  const [pipeline,   setPipeline]   = useState(()=>{ const s=loadStored(); return s.pipeline??CLIENTS.map(()=>0); });
+  const [newClients, setNewClients] = useState(()=>{ const s=loadStored(); return s.newClients??[]; });
+  const [ncRate,     setNcRate]     = useState(()=>{ const s=loadStored(); return s.ncRate??5; });
+  const [rev,        setRev]        = useState(()=>{ const s=loadStored(); return s.rev??{}; });
   const [copyLabel,  setCopyLabel]  = useState("Export to Sheets");
+
+  useEffect(()=>{ try { localStorage.setItem(LS_KEY, JSON.stringify({tab,fteRate,ncFteRate,weeks,invoices,cdata,pipeline,newClients,ncRate,rev})); } catch(_){} }, [tab,fteRate,ncFteRate,weeks,invoices,cdata,pipeline,newClients,ncRate,rev]);
 
   const derived = CLIENTS.map((c,i) => {
     const d = cdata[i]??clientDefaults()[i];
@@ -612,7 +626,7 @@ function App() {
 
   const setField   = (i,f,v) => setCdata(p=>p.map((c,idx)=>idx===i?{...c,[f]:v}:c));
   const setWkFTE   = (wi,ci,v) => setWeeks(p=>p.map((w,idx)=>{if(idx!==wi)return w;const f=[...w.ftes];f[ci]=v;return{...w,ftes:f};}));
-  const addWeek    = () => setWeeks(p=>[...p,nextWeekInfo(p)]);
+  const addWeek    = () => setWeeks(p=>[...p,nextWeekInfo(p, CLIENTS.map((_,i)=>cdata[i]?.ftes??0))]);
   const setPipeDoc = (i,v) => setPipeline(p=>p.map((x,idx)=>idx===i?v:x));
   const addNC      = () => setNewClients(p=>[...p,{id:String(Date.now()),name:"New Client",leases:0,hoursPerLease:0,days:90,startDate:"",fteRate:ncFteRate}]);
   const updNC      = (id,patch) => setNewClients(p=>p.map(n=>n.id===id?{...n,...patch}:n));
