@@ -633,13 +633,16 @@ function App() {
     setAuditLog(p => [{ts: Date.now(), view, target, field, from: f, to: t}, ...p].slice(0, 500));
   };
 
-  const setField   = (i,f,v) => { logEdit("Present", CLIENTS[i].name, f, cdata[i]?.[f], v); setCdata(p=>p.map((c,idx)=>idx===i?{...c,[f]:v}:c)); };
+  const FIELD_LABELS = { pct:"% Complete", ftes:"FTEs", docsets:"Docsets", masterLease:"Master Lease", masterAgreement:"Master Agreement", amendment:"Amendment", notice:"Notice", commencementLetter:"Commencement Letter", invalidDocs:"Invalid docs", doNotProcess:"Do not process", name:"Name", leases:"Leases", hoursPerLease:"Hrs/lease", days:"Days", startDate:"Start date", fteRate:"$/FTE/mo" };
+  const fieldLabel = k => FIELD_LABELS[k] ?? k;
+
+  const setField   = (i,f,v) => { logEdit("Present", CLIENTS[i].name, fieldLabel(f), cdata[i]?.[f], v); setCdata(p=>p.map((c,idx)=>idx===i?{...c,[f]:v}:c)); };
   const setWkFTE   = (wi,ci,v) => { logEdit("Past", `${weeks[wi]?.label} · ${CLIENTS[ci].short}`, "FTEs", weeks[wi]?.ftes[ci], v); setWeeks(p=>p.map((w,idx)=>{if(idx!==wi)return w;const f=[...w.ftes];f[ci]=v;return{...w,ftes:f};})); };
   const addWeek    = () => { const nw=nextWeekInfo(weeks, CLIENTS.map((_,i)=>cdata[i]?.ftes??0)); logEdit("Past", "—", "Week added", "—", nw.label); setWeeks(p=>[...p,nw]); };
   const setPipeDoc = (i,v) => { logEdit("Future", CLIENTS[i].name, "Pipeline +docs", pipeline[i], v); setPipeline(p=>p.map((x,idx)=>idx===i?v:x)); };
   const addNC      = () => { logEdit("Future", "—", "Client added", "—", "New Client"); setNewClients(p=>[...p,{id:String(Date.now()),name:"New Client",leases:0,hoursPerLease:0,days:90,startDate:"",fteRate:ncFteRate}]); };
-  const updNC      = (id,patch) => { const cur=newClients.find(n=>n.id===id); Object.keys(patch).forEach(k=>logEdit("Future", cur?.name??id, k, cur?.[k], patch[k])); setNewClients(p=>p.map(n=>n.id===id?{...n,...patch}:n)); };
-  const delNC      = id => { const nm=newClients.find(n=>n.id===id)?.name??id; logEdit("Future", nm, "Client removed", "present", "—"); setNewClients(p=>p.filter(n=>n.id!==id)); };
+  const updNC      = (id,patch) => { const cur=newClients.find(n=>n.id===id); Object.keys(patch).forEach(k=>logEdit("Future", cur?.name??id, fieldLabel(k), cur?.[k], patch[k])); setNewClients(p=>p.map(n=>n.id===id?{...n,...patch}:n)); };
+  const delNC      = id => { const nm=newClients.find(n=>n.id===id)?.name??id; logEdit("Future", nm, "Client removed", "active", "—"); setNewClients(p=>p.filter(n=>n.id!==id)); };
   const setRevenue = (k,v) => { const nm=CLIENTS.find(c=>c.name===k)?.name??(newClients.find(n=>n.id===k)?.name??k); logEdit("P&L", nm, "$/Docset", rev[k], v); setRev(p=>({...p,[k]:v})); };
   const setInvoice = (mk,v) => { logEdit("Past", mlabel(mk), "Invoice received", invoices[mk], v); setInvoices(p=>({...p,[mk]:v})); };
 
