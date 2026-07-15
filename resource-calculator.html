@@ -461,6 +461,42 @@ const p0 = s => { const n=parseInt(s,10); return isNaN(n)||n<0?0:n; };
 const pf = (s,def) => { const n=parseFloat(s); return isNaN(n)||n<=0?def:n; };
 const mlabel = k => (MONTH_NAMES[k.slice(0,3)]??k.slice(0,3))+" "+k.slice(3);
 
+// ── FTE ramp engine ────────────────────────────────────────────────────────
+// Probability-of-close weights for risk-adjusted portfolio views.
+const PROB_WEIGHT = { High:0.9, Medium:0.5, Low:0.2 };
+const PROBS = ["High","Medium","Low"];
+const WORKDAYS_PER_MO = 22;
+
+const addCalMonths = (d,n) => { const x=new Date(d); x.setMonth(x.getMonth()+Math.round(n)); return x; };
+const monthIndex   = (from,to) => (to.getFullYear()-from.getFullYear())*12 + (to.getMonth()-from.getMonth());
+
+// Headcount for month index m (0 = first ramp month): linear start->target over
+// rampMonths, then held flat at target. Before the ramp begins (m<0) => 0.
+function rampFTE(m, start, target, rampMonths) {
+  if (m < 0) return 0;
+  const R = Math.max(0, rampMonths||0);
+  if (R === 0 || m >= R) return Math.max(0,target);
+  return Math.max(0, start + (target - start) * (m / R));
+}
+
+// Walk the ramp month-by-month until `workFteDays` of capacity is delivered
+// (each FTE clears WORKDAYS_PER_MO productive days/month). Returns the month
+// count to completion, the summed FTE-months (for cost), and the monthly curve.
+function rampSchedule(start, target, rampMonths, workFteDays, maxMonths=180) {
+  if (!(workFteDays>0) || !((target>0)||(start>0))) return {months:0,totalFteMonths:0,monthlyFTEs:[],done:false};
+  const monthlyFTEs=[]; let cum=0, months=0, totalFteMonths=0, done=false;
+  for (let m=0; m<maxMonths; m++) {
+    const fte = rampFTE(m, start, target, rampMonths);
+    monthlyFTEs.push(fte); cum += fte*WORKDAYS_PER_MO; totalFteMonths += fte; months = m+1;
+    if (cum >= workFteDays) { done=true; break; }
+  }
+  return {months, totalFteMonths, monthlyFTEs, done};
+}
+
+// Auto-suggested plateau team from remaining work and a target timeline.
+const suggestTarget = (workFteDays, timelineMonths) =>
+  workFteDays>0 ? Math.max(1, Math.round(workFteDays/(WORKDAYS_PER_MO*Math.max(1,timelineMonths)))) : 0;
+
 function nextWeekInfo(weeks, seedFtes) {
   // New weeks seed their per-client FTEs from the current Present deployment
   // (Phase 3: Present drives Past). Already-entered weeks stay as typed.
@@ -551,6 +587,66 @@ const ClientCard = ({client, d, derived, onField, defaultOpen=false}) => {
   );
 };
 
+// ── New-client (ramp) card ────────────────────────────────────────────────────
+const NCCard = ({nc, calc, ncFteRate, onUpd, onDel}) => {
+  const [open, setOpen] = useState(false);
+  const ready = nc.leases>0;
+  const probTone = nc.probability==="High"?"green":nc.probability==="Medium"?"amber":"neutral";
+  const fld = (label, input) => (<div><div className="field-label">{label}</div>{input}</div>);
+  return (
+    <div className="client-card">
+      <div className="client-card-header" onClick={()=>setOpen(o=>!o)}>
+        <span style={{fontSize:11,color:"var(--text3)",width:12}}>{open?"▾":"▸"}</span>
+        <input value={nc.name} onClick={e=>e.stopPropagation()} onChange={e=>onUpd({name:e.target.value})}
+               style={{fontWeight:500,border:"none",background:"none",flex:"0 0 170px",fontSize:14,padding:0}} />
+        <Badge tone={probTone}>{nc.probability}</Badge>
+        <div className="spacer" />
+        {ready ? (
+          <>
+            <span style={{fontSize:12,color:"var(--text3)"}}>→ {calc.target} FTEs</span>
+            <span style={{fontSize:12,color:"var(--text2)"}}>done {fmtDate(calc.eta)}</span>
+            <span style={{fontSize:12,color:"var(--text)",fontWeight:500}}>{fmtMoney(calc.totalCost)}</span>
+          </>
+        ) : <span style={{fontSize:12,color:"var(--text3)"}}>Enter lease volume…</span>}
+        <button onClick={e=>{e.stopPropagation();onDel();}} style={{background:"none",border:"none",color:"var(--text3)",cursor:"pointer",fontSize:16,padding:"0 4px",lineHeight:1}}>×</button>
+      </div>
+      {open && (
+        <div className="client-card-body">
+          <div className="field-grid cols3" style={{marginTop:16}}>
+            {fld("Lease volume", <input type="number" value={nc.leases>0?nc.leases:""} onChange={e=>onUpd({leases:p0(e.target.value)})} placeholder="e.g. 5750" style={{width:"100%"}} />)}
+            {fld("Hrs / lease", <input type="number" value={nc.hoursPerLease>0?nc.hoursPerLease:""} onChange={e=>onUpd({hoursPerLease:pf(e.target.value,0)})} placeholder="16" style={{width:"100%"}} />)}
+            {fld("$ / FTE / mo", <input type="number" value={nc.fteRate>0?nc.fteRate:""} onChange={e=>onUpd({fteRate:p0(e.target.value)||ncFteRate})} placeholder={String(ncFteRate)} style={{width:"100%"}} />)}
+            {fld("Kickoff date", <input type="date" value={nc.kickoffDate} onChange={e=>onUpd({kickoffDate:e.target.value})} style={{width:"100%",fontSize:12}} />)}
+            {fld("Staff ramp-up date", <input type="date" value={nc.rampDate} onChange={e=>onUpd({rampDate:e.target.value})} style={{width:"100%",fontSize:12}} />)}
+            {fld("Timeline (months)", <input type="number" value={nc.timelineMonths>0?nc.timelineMonths:""} onChange={e=>onUpd({timelineMonths:p0(e.target.value)})} placeholder="6" style={{width:"100%"}} />)}
+            {fld("Start FTEs", <input type="number" value={nc.startFTE>0?nc.startFTE:""} onChange={e=>onUpd({startFTE:p0(e.target.value)})} placeholder="0" style={{width:"100%"}} />)}
+            {fld(`Target FTEs${calc.suggTarget?` (sugg. ${calc.suggTarget})`:""}`, <input type="number" value={nc.targetFTE>0?nc.targetFTE:""} onChange={e=>onUpd({targetFTE:p0(e.target.value)})} placeholder={calc.suggTarget?String(calc.suggTarget):"auto"} style={{width:"100%"}} />)}
+            {fld("Ramp length (months)", <input type="number" value={nc.rampMonths>0?nc.rampMonths:""} onChange={e=>onUpd({rampMonths:p0(e.target.value)})} placeholder="3" style={{width:"100%"}} />)}
+            {fld("Probability", <select value={nc.probability} onChange={e=>onUpd({probability:e.target.value})} style={{width:"100%",background:"var(--bg)",border:"1px solid var(--border)",borderRadius:6,padding:"5px 8px",font:"inherit",color:"var(--text)",cursor:"pointer"}}>{PROBS.map(p=><option key={p} value={p}>{p}</option>)}</select>)}
+          </div>
+          {ready && (
+            <>
+              <hr className="divider" style={{margin:"16px 0"}} />
+              <div className="row" style={{gap:24,flexWrap:"wrap"}}>
+                <div><div className="field-label">Throughput</div><strong style={{fontSize:15}}>{Math.round(calc.effectiveRate*WORKDAYS_PER_MO)}</strong><span style={{fontSize:11,color:"var(--text3)"}}> leases/FTE/mo</span></div>
+                <div><div className="field-label">Current-month FTEs</div><strong style={{fontSize:15}}>{Math.round(calc.currMonthly)}</strong></div>
+                <div><div className="field-label">Months to done</div><strong style={{fontSize:15}}>{calc.monthsToDone}</strong></div>
+                <div><div className="field-label">Total cost</div><strong style={{fontSize:15}}>{fmtMoney(calc.totalCost)}</strong></div>
+              </div>
+              {calc.monthlyFTEs.length>0 && (
+                <div style={{marginTop:12,fontSize:12,color:"var(--text2)"}}>
+                  <span style={{color:"var(--text3)"}}>Monthly ramp: </span>
+                  {calc.monthlyFTEs.slice(0,10).map(v=>Math.round(v)).join(" → ")}{calc.monthlyFTEs.length>10?" …":""}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ── Main app ─────────────────────────────────────────────────────────────────
 function App() {
   const TODAY = new Date(); TODAY.setHours(0,0,0,0);
@@ -600,25 +696,41 @@ function App() {
     return {
       id: raw.id??String(Date.now()), name: raw.name??"New Client",
       leases: raw.leases??0, hoursPerLease: raw.hoursPerLease??0,
-      days: raw.days??90, startDate: raw.startDate??"",
       fteRate: raw.fteRate??ncFteRate,
+      kickoffDate: raw.kickoffDate ?? raw.startDate ?? "",
+      rampDate: raw.rampDate ?? raw.startDate ?? "",
+      timelineMonths: raw.timelineMonths ?? (raw.days ? Math.max(1,Math.round(raw.days/30)) : 6),
+      startFTE: raw.startFTE ?? 0,
+      targetFTE: raw.targetFTE ?? 0,          // 0 => use the auto-suggested target
+      rampMonths: raw.rampMonths ?? 3,
+      probability: PROBS.includes(raw.probability) ? raw.probability : "High",
     };
   }
 
   function calcNC(nc) {
-    const effectiveRate = nc.hoursPerLease>0?8/nc.hoursPerLease:ncRate;
-    const workDays    = calToWork(Math.max(1,nc.days));
-    const ftes        = workDays>0&&nc.leases>0?Math.ceil(nc.leases/(effectiveRate*workDays)):0;
-    const startRaw    = nc.startDate?new Date(nc.startDate+"T00:00:00"):new Date(TODAY);
-    const eta         = ftes>0?addWorkDays(startRaw,workDays):new Date(startRaw);
-    const months      = workDays/22;
-    const monthlyCost = ftes*nc.fteRate;
-    const totalCost   = monthlyCost*months;
-    const docsets     = nc.leases>0?Math.max(1,Math.round(nc.leases/30)):0;
-    const revenue     = docsets*(rev[nc.id]??0);
-    const profit      = revenue-totalCost;
-    const margin      = revenue>0?profit/revenue:0;
-    return {ftes,eta,startRaw,months,monthlyCost,totalCost,effectiveRate,workDays,docsets,revenue,profit,margin};
+    const effectiveRate = nc.hoursPerLease>0?8/nc.hoursPerLease:ncRate;      // leases / FTE / day
+    const workFteDays   = (nc.leases>0 && effectiveRate>0) ? nc.leases/effectiveRate : 0;
+    const suggTarget    = suggestTarget(workFteDays, nc.timelineMonths);
+    const target        = nc.targetFTE>0 ? nc.targetFTE : suggTarget;
+    const start         = Math.max(0, nc.startFTE||0);
+    const rampMonths    = Math.max(0, nc.rampMonths||0);
+    const rampStart     = nc.rampDate ? new Date(nc.rampDate+"T00:00:00")
+                        : nc.kickoffDate ? new Date(nc.kickoffDate+"T00:00:00") : new Date(TODAY);
+    const sched         = rampSchedule(start, target, rampMonths, workFteDays);
+    const monthsToDone  = sched.months;
+    const eta           = addCalMonths(rampStart, monthsToDone);
+    const currMonthly   = rampFTE(monthIndex(rampStart, TODAY), start, target, rampMonths);
+    const monthlyCost   = target*nc.fteRate;               // peak monthly run-rate
+    const totalCost     = sched.totalFteMonths*nc.fteRate; // Σ (monthly FTE × rate)
+    const docsets       = nc.leases>0?Math.max(1,Math.round(nc.leases/30)):0;
+    const revenue       = docsets*(rev[nc.id]??0);
+    const profit        = revenue-totalCost;
+    const margin        = revenue>0?profit/revenue:0;
+    const weight        = PROB_WEIGHT[nc.probability]??1;
+    return {ftes:target, target, start, suggTarget, rampMonths, rampStart, effectiveRate, workFteDays,
+            monthsToDone, months:monthsToDone, eta, currMonthly, monthlyCost, totalCost,
+            totalFteMonths:sched.totalFteMonths, docsets, revenue, profit, margin, weight,
+            monthlyFTEs:sched.monthlyFTEs, done:sched.done};
   }
 
   const normClients  = newClients.map(normNC);
@@ -634,14 +746,14 @@ function App() {
     setAuditLog(p => [{ts: Date.now(), view, target, field, from: f, to: t}, ...p].slice(0, 500));
   };
 
-  const FIELD_LABELS = { pct:"% Complete", ftes:"FTEs", docsets:"Docsets", masterLease:"Master Lease", masterAgreement:"Master Agreement", amendment:"Amendment", notice:"Notice", commencementLetter:"Commencement Letter", invalidDocs:"Invalid docs", doNotProcess:"Do not process", name:"Name", leases:"Leases", hoursPerLease:"Hrs/lease", days:"Days", startDate:"Start date", fteRate:"$/FTE/mo" };
+  const FIELD_LABELS = { pct:"% Complete", ftes:"FTEs", docsets:"Docsets", masterLease:"Master Lease", masterAgreement:"Master Agreement", amendment:"Amendment", notice:"Notice", commencementLetter:"Commencement Letter", invalidDocs:"Invalid docs", doNotProcess:"Do not process", name:"Name", leases:"Leases", hoursPerLease:"Hrs/lease", days:"Days", startDate:"Start date", fteRate:"$/FTE/mo", kickoffDate:"Kickoff date", rampDate:"Ramp-up date", timelineMonths:"Timeline (months)", startFTE:"Start FTEs", targetFTE:"Target FTEs", rampMonths:"Ramp length (months)", probability:"Probability" };
   const fieldLabel = k => FIELD_LABELS[k] ?? k;
 
   const setField   = (i,f,v) => { logEdit("Present", CLIENTS[i].name, fieldLabel(f), cdata[i]?.[f], v); setCdata(p=>p.map((c,idx)=>idx===i?{...c,[f]:v}:c)); };
   const setWkFTE   = (wi,ci,v) => { logEdit("Past", `${weeks[wi]?.label} · ${CLIENTS[ci].short}`, "FTEs", weeks[wi]?.ftes[ci], v); setWeeks(p=>p.map((w,idx)=>{if(idx!==wi)return w;const f=[...w.ftes];f[ci]=v;return{...w,ftes:f};})); };
   const addWeek    = () => { const nw=nextWeekInfo(weeks, CLIENTS.map((_,i)=>cdata[i]?.ftes??0)); logEdit("Past", "—", "Week added", "—", nw.label); setWeeks(p=>[...p,nw]); };
   const setPipeDoc = (i,v) => { logEdit("Future", CLIENTS[i].name, "Pipeline +docs", pipeline[i], v); setPipeline(p=>p.map((x,idx)=>idx===i?v:x)); };
-  const addNC      = () => { logEdit("Future", "—", "Client added", "—", "New Client"); setNewClients(p=>[...p,{id:String(Date.now()),name:"New Client",leases:0,hoursPerLease:0,days:90,startDate:"",fteRate:ncFteRate}]); };
+  const addNC      = () => { logEdit("Future", "—", "Client added", "—", "New Client"); setNewClients(p=>[...p,{id:String(Date.now()),name:"New Client",leases:0,hoursPerLease:16,fteRate:ncFteRate,kickoffDate:"",rampDate:"",timelineMonths:6,startFTE:0,targetFTE:0,rampMonths:3,probability:"High"}]); };
   const updNC      = (id,patch) => { const cur=newClients.find(n=>n.id===id); Object.keys(patch).forEach(k=>logEdit("Future", cur?.name??id, fieldLabel(k), cur?.[k], patch[k])); setNewClients(p=>p.map(n=>n.id===id?{...n,...patch}:n)); };
   const delNC      = id => { const nm=newClients.find(n=>n.id===id)?.name??id; logEdit("Future", nm, "Client removed", "active", "—"); setNewClients(p=>p.filter(n=>n.id!==id)); };
   const setRevenue = (k,v) => { const nm=CLIENTS.find(c=>c.name===k)?.name??(newClients.find(n=>n.id===k)?.name??k); logEdit("P&L", nm, "$/Docset", rev[k], v); setRev(p=>({...p,[k]:v})); };
@@ -955,50 +1067,33 @@ function App() {
                   No new clients yet — click "+ Add client" to model resource needs
                 </div>
               ) : (
-                <div className="table-card" style={{overflowX:"auto"}}>
-                  <div className="nc-header">
-                    <span style={{textAlign:"left"}}>Client</span>
-                    <span>Leases</span>
-                    <span>Hrs/lease</span>
-                    <span>Days</span>
-                    <span>Start date</span>
-                    <span>$/FTE/mo</span>
-                    <span>FTEs</span>
-                    <span>Done by</span>
-                    <span>$/month</span>
-                    <span>Total $</span>
-                    <span></span>
-                  </div>
-                  <div style={{borderTop:"1px solid var(--border)"}} />
-                  {normClients.map((nc,ri)=>{
-                    const calc=calcNC(nc); const ready=nc.leases>0&&nc.days>0;
+                <>
+                  {normClients.map(nc=>(
+                    <NCCard key={nc.id} nc={nc} calc={calcNC(nc)} ncFteRate={ncFteRate} onUpd={patch=>updNC(nc.id,patch)} onDel={()=>delNC(nc.id)} />
+                  ))}
+                  {normClients.some(nc=>nc.leases>0)&&(()=>{
+                    const active   = normClients.filter(nc=>nc.leases>0).map(calcNC);
+                    const newPeak  = active.reduce((s,c)=>s+c.target,0);
+                    const spendMo  = active.reduce((s,c)=>s+c.monthlyCost,0);
+                    const wPeak    = active.reduce((s,c)=>s+c.target*c.weight,0);
+                    const wSpendMo = active.reduce((s,c)=>s+c.monthlyCost*c.weight,0);
                     return (
-                      <div key={nc.id} className="nc-grid" style={{background:ri%2===1?"var(--bg)":"var(--surface)",borderBottom:"1px solid var(--border)"}}>
-                        <input value={nc.name} onChange={e=>updNC(nc.id,{name:e.target.value})} style={{fontWeight:500,textAlign:"left"}} />
-                        <input type="number" value={nc.leases>0?nc.leases:""} onChange={e=>updNC(nc.id,{leases:p0(e.target.value)})} placeholder="e.g. 100" />
-                        <input type="number" value={nc.hoursPerLease>0?nc.hoursPerLease:""} onChange={e=>updNC(nc.id,{hoursPerLease:pf(e.target.value,0)})} placeholder="—" />
-                        <input type="number" value={nc.days>0?nc.days:""} onChange={e=>updNC(nc.id,{days:p0(e.target.value)})} placeholder="90" />
-                        <input type="date" value={nc.startDate} onChange={e=>updNC(nc.id,{startDate:e.target.value})} style={{fontSize:12,textAlign:"left"}} />
-                        <input type="number" value={nc.fteRate>0?nc.fteRate:""} onChange={e=>updNC(nc.id,{fteRate:p0(e.target.value)||ncFteRate})} placeholder={String(ncFteRate)} />
-                        <div style={{textAlign:"right",fontFamily:"'Instrument Serif',serif",fontSize:ready?22:14,color:ready?"var(--text)":"var(--text3)"}}>{ready?calc.ftes:"—"}</div>
-                        <div style={{textAlign:"right",fontSize:12,color:ready?"var(--text2)":"var(--text3)"}}>{ready?fmtDate(calc.eta):"—"}</div>
-                        <div style={{textAlign:"right",fontSize:12,color:ready?"var(--text)":"var(--text3)",fontWeight:ready?500:400}}>{ready?fmtMoney(calc.monthlyCost):"—"}</div>
-                        <div style={{textAlign:"right",fontSize:12,color:ready?"var(--text)":"var(--text3)",fontWeight:ready?500:400}}>{ready?fmtMoney(calc.totalCost):"—"}</div>
-                        <button onClick={()=>delNC(nc.id)} style={{background:"none",border:"none",color:"var(--text3)",cursor:"pointer",fontSize:16,padding:0,lineHeight:1}}>×</button>
+                      <div className="table-card" style={{padding:"16px",marginTop:8}}>
+                        <div className="stat-row cols-4" style={{marginBottom:0}}>
+                          <Stat value={totalFTEs} label="Existing FTEs" />
+                          <Stat value={newPeak} label="New client FTEs (peak)" tone="amber" />
+                          <Stat value={totalFTEs+newPeak} label="Total FTEs (peak)" tone={totalFTEs+newPeak>15?"red":"green"} />
+                          <Stat value={fmtMoney(spendMo)} label="New client spend / mo" />
+                        </div>
+                        <div style={{fontSize:12,color:"var(--text2)",marginTop:14,display:"flex",gap:24,flexWrap:"wrap",alignItems:"center"}}>
+                          <span><span style={{color:"var(--text3)"}}>Risk-adjusted new FTEs:</span> <strong>{Math.round(wPeak)}</strong></span>
+                          <span><span style={{color:"var(--text3)"}}>Risk-adjusted spend / mo:</span> <strong>{fmtMoney(wSpendMo)}</strong></span>
+                          <span style={{color:"var(--text3)",fontSize:11}}>weighted by probability · High 90% · Medium 50% · Low 20%</span>
+                        </div>
                       </div>
                     );
-                  })}
-                  {normClients.some(nc=>nc.leases>0)&&(
-                    <div style={{padding:"14px 16px",borderTop:"1px solid var(--border)",background:"var(--surface)"}}>
-                      <div className="stat-row cols-4" style={{marginBottom:0}}>
-                        <Stat value={totalFTEs} label="Existing FTEs" />
-                        <Stat value={totalNewFTEs} label="New client FTEs" tone="amber" />
-                        <Stat value={totalFTEs+totalNewFTEs} label="Total FTEs" tone={totalFTEs+totalNewFTEs>15?"red":"green"} />
-                        <Stat value={fmtMoney(normClients.reduce((s,nc)=>s+calcNC(nc).monthlyCost,0))} label="New client spend/mo" />
-                      </div>
-                    </div>
-                  )}
-                </div>
+                  })()}
+                </>
               )}
             </div>
           </>
