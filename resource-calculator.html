@@ -440,6 +440,7 @@ const clientDefaults = () => CLIENTS.map(c => ({
   ftes:c.defFTE, pct:c.pct, docsets:c.docsets,
   masterLease:c.docs, masterAgreement:0, amendment:0,
   notice:0, commencementLetter:0, invalidDocs:0, doNotProcess:0,
+  rampOn:false, startFTE:1, targetFTE:0, rampMonths:3, rampDate:"",
 }));
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -487,8 +488,13 @@ function rampSchedule(start, target, rampMonths, workFteDays, maxMonths=180) {
   const monthlyFTEs=[]; let cum=0, months=0, totalFteMonths=0, done=false;
   for (let m=0; m<maxMonths; m++) {
     const fte = rampFTE(m, start, target, rampMonths);
-    monthlyFTEs.push(fte); cum += fte*WORKDAYS_PER_MO; totalFteMonths += fte; months = m+1;
-    if (cum >= workFteDays) { done=true; break; }
+    monthlyFTEs.push(fte);
+    const cap = fte*WORKDAYS_PER_MO;
+    if (cap>0 && cum+cap >= workFteDays) {           // final month is partial — prorate it
+      const frac = (workFteDays-cum)/cap;
+      totalFteMonths += fte*frac; months = m+frac; done=true; break;
+    }
+    cum += cap; totalFteMonths += fte; months = m+1;
   }
   return {months, totalFteMonths, monthlyFTEs, done};
 }
@@ -526,7 +532,7 @@ const Badge = ({children, tone="neutral"}) => (
 // ── Collapsible client card ───────────────────────────────────────────────────
 const ClientCard = ({client, d, derived, onField, defaultOpen=false}) => {
   const [open, setOpen] = useState(defaultOpen);
-  const {total, proc, impliedRate, eta, delta, thru} = derived;
+  const {total, proc, impliedRate, eta, delta, thru, curFTEs, rampOn, monthlyFTEs, monthsToDone} = derived;
   const badge = d.pct>=100 ? "green" : delta>7 ? "red" : delta>0 ? "amber" : "neutral";
   const badgeLabel = d.pct>=100 ? "Complete" : delta>0 ? `+${delta}d late` : delta<0 ? `${Math.abs(delta)}d early` : "On track";
 
@@ -538,7 +544,7 @@ const ClientCard = ({client, d, derived, onField, defaultOpen=false}) => {
         <Badge tone={badge}>{badgeLabel}</Badge>
         <span style={{fontSize:12,color:"var(--text3)"}}>{d.pct}% done</span>
         <span style={{fontSize:12,color:"var(--text2)"}}>ETA {fmtDate(eta)}</span>
-        <span style={{fontSize:12,color:"var(--text3)"}}>{d.ftes} FTE{d.ftes!==1?"s":""}</span>
+        <span style={{fontSize:12,color:"var(--text3)"}}>{Math.round(curFTEs)} FTE{Math.round(curFTEs)!==1?"s":""}{rampOn?" · ramping":""}</span>
       </div>
       {open && (
         <div className="client-card-body">
@@ -581,6 +587,30 @@ const ClientCard = ({client, d, derived, onField, defaultOpen=false}) => {
             <div><div className="field-label">Implied rate</div><strong style={{fontSize:15}}>{impliedRate.toFixed(1)}</strong><span style={{fontSize:11,color:"var(--text3)"}}> d/FTE/d</span></div>
             <div><div className="field-label">Observed throughput</div><strong style={{fontSize:15}}>{thru>0?thru.toFixed(1):"—"}</strong>{thru>0&&<span style={{fontSize:11,color:"var(--text3)"}}> d/FTE/d</span>}</div>
           </div>
+          <hr className="divider" style={{margin:"16px 0"}} />
+          <label className="row" style={{gap:6,cursor:"pointer",fontSize:13,marginBottom:12}}>
+            <input type="checkbox" checked={!!d.rampOn} onChange={e=>onField("rampOn",e.target.checked)} /> Model FTE ramp-up
+          </label>
+          {d.rampOn && (
+            <>
+              <div className="field-grid cols3">
+                <div><div className="field-label">Start FTEs</div><input type="number" value={d.startFTE??0} onChange={e=>onField("startFTE",p0(e.target.value))} style={{width:72}} /></div>
+                <div><div className="field-label">Target FTEs (blank = {d.ftes})</div><input type="number" value={d.targetFTE>0?d.targetFTE:""} onChange={e=>onField("targetFTE",p0(e.target.value))} placeholder={String(d.ftes)} style={{width:72}} /></div>
+                <div><div className="field-label">Ramp length (months)</div><input type="number" value={d.rampMonths??0} onChange={e=>onField("rampMonths",p0(e.target.value))} style={{width:72}} /></div>
+                <div><div className="field-label">Ramp start date</div><input type="date" value={d.rampDate??""} onChange={e=>onField("rampDate",e.target.value)} style={{width:"100%",fontSize:12}} /></div>
+              </div>
+              <div className="row" style={{marginTop:12,gap:24,flexWrap:"wrap"}}>
+                <div><div className="field-label">Current-month FTEs</div><strong style={{fontSize:15}}>{Math.round(curFTEs)}</strong></div>
+                <div><div className="field-label">Months to done</div><strong style={{fontSize:15}}>{monthsToDone!=null?Math.ceil(monthsToDone):"—"}</strong></div>
+              </div>
+              {monthlyFTEs.length>0 && (
+                <div style={{marginTop:10,fontSize:12,color:"var(--text2)"}}>
+                  <span style={{color:"var(--text3)"}}>Monthly ramp: </span>
+                  {monthlyFTEs.slice(0,10).map(v=>Math.round(v)).join(" → ")}{monthlyFTEs.length>10?" …":""}
+                </div>
+              )}
+            </>
+          )}
         </div>
       )}
     </div>
@@ -630,7 +660,7 @@ const NCCard = ({nc, calc, ncFteRate, onUpd, onDel}) => {
               <div className="row" style={{gap:24,flexWrap:"wrap"}}>
                 <div><div className="field-label">Throughput</div><strong style={{fontSize:15}}>{Math.round(calc.effectiveRate*WORKDAYS_PER_MO)}</strong><span style={{fontSize:11,color:"var(--text3)"}}> leases/FTE/mo</span></div>
                 <div><div className="field-label">Current-month FTEs</div><strong style={{fontSize:15}}>{Math.round(calc.currMonthly)}</strong></div>
-                <div><div className="field-label">Months to done</div><strong style={{fontSize:15}}>{calc.monthsToDone}</strong></div>
+                <div><div className="field-label">Months to done</div><strong style={{fontSize:15}}>{Math.ceil(calc.monthsToDone)}</strong></div>
                 <div><div className="field-label">Total cost</div><strong style={{fontSize:15}}>{fmtMoney(calc.totalCost)}</strong></div>
               </div>
               {calc.monthlyFTEs.length>0 && (
@@ -679,17 +709,29 @@ function App() {
     const impliedRate = initRem>0&&c.initFteDays>0?(c.docs*initRem)/c.initFteDays:0;
     const wkLeft   = workDaysUntil(TODAY,c.base);
     const reqFTEs  = wkLeft>0&&fteDays>0?fteDays/wkLeft:0;
-    const eta      = fteDays>0?addWorkDays(TODAY,fteDays/Math.max(1,d.ftes)):new Date(TODAY);
+    // FTE ramp (opt-in per client via d.rampOn). Off => original flat behavior, zero change.
+    const rampOn   = !!d.rampOn;
+    const rStart   = Math.max(0, d.startFTE??0);
+    const rTarget  = d.targetFTE>0 ? d.targetFTE : (d.ftes||0);
+    const rMonths  = Math.max(0, d.rampMonths??0);
+    const rDate    = d.rampDate ? new Date(d.rampDate+"T00:00:00") : new Date(TODAY);
+    const rSched   = rampOn ? rampSchedule(rStart, rTarget, rMonths, fteDays) : null;
+    const curFTEs  = rampOn ? rampFTE(monthIndex(rDate,TODAY), rStart, rTarget, rMonths) : d.ftes;
+    const monthlyFTEs  = rSched ? rSched.monthlyFTEs : [];
+    const monthsToDone = rSched ? rSched.months : null;
+    const eta      = rampOn ? (fteDays>0?addCalMonths(rDate, rSched.months):new Date(TODAY))
+                            : (fteDays>0?addWorkDays(TODAY,fteDays/Math.max(1,d.ftes)):new Date(TODAY));
     const delta    = Math.round((eta.getTime()-c.base.getTime())/86400000);
     const wkdWkd   = weeks.reduce((s,w)=>s+(w.ftes[i]??0)*5,0);
     const docsDone = proc*(d.pct/100);
     const thru     = wkdWkd>0?docsDone/wkdWkd:0;
     const remMos   = d.ftes>0?(fteDays/d.ftes)/22:0;
-    const remSpend = remMos*d.ftes*fteRate;
+    const remSpend = rampOn&&rSched ? rSched.totalFteMonths*fteRate : remMos*d.ftes*fteRate;
+    const weight   = PROB_WEIGHT[d.probability]??1;
     const revenue  = d.docsets*(rev[c.name]??0);
     const profit   = revenue-remSpend;
     const margin   = revenue>0?profit/revenue:0;
-    return {d,total,proc,fteDays,impliedRate,wkLeft,reqFTEs,eta,delta,wkdWkd,docsDone,thru,remMos,remSpend,revenue,profit,margin};
+    return {d,total,proc,fteDays,impliedRate,wkLeft,reqFTEs,eta,delta,wkdWkd,docsDone,thru,remMos,remSpend,revenue,profit,margin,rampOn,curFTEs,monthlyFTEs,monthsToDone,weight};
   });
 
   function normNC(raw) {
@@ -734,7 +776,7 @@ function App() {
   }
 
   const normClients  = newClients.map(normNC);
-  const totalFTEs    = cdata.reduce((s,d)=>s+d.ftes,0);
+  const totalFTEs    = derived.reduce((s,x)=>s+Math.round(x.curFTEs),0);
   const wkCostPerFTE = fteRate/4.33;
   const monthKeys    = [...new Set(weeks.map(w=>w.monthKey))];
   const totalNewFTEs = normClients.reduce((s,nc)=>s+calcNC(nc).ftes,0);
@@ -746,12 +788,12 @@ function App() {
     setAuditLog(p => [{ts: Date.now(), view, target, field, from: f, to: t}, ...p].slice(0, 500));
   };
 
-  const FIELD_LABELS = { pct:"% Complete", ftes:"FTEs", docsets:"Docsets", masterLease:"Master Lease", masterAgreement:"Master Agreement", amendment:"Amendment", notice:"Notice", commencementLetter:"Commencement Letter", invalidDocs:"Invalid docs", doNotProcess:"Do not process", name:"Name", leases:"Leases", hoursPerLease:"Hrs/lease", days:"Days", startDate:"Start date", fteRate:"$/FTE/mo", kickoffDate:"Kickoff date", rampDate:"Ramp-up date", timelineMonths:"Timeline (months)", startFTE:"Start FTEs", targetFTE:"Target FTEs", rampMonths:"Ramp length (months)", probability:"Probability" };
+  const FIELD_LABELS = { pct:"% Complete", ftes:"FTEs", docsets:"Docsets", masterLease:"Master Lease", masterAgreement:"Master Agreement", amendment:"Amendment", notice:"Notice", commencementLetter:"Commencement Letter", invalidDocs:"Invalid docs", doNotProcess:"Do not process", name:"Name", leases:"Leases", hoursPerLease:"Hrs/lease", days:"Days", startDate:"Start date", fteRate:"$/FTE/mo", rampOn:"Ramp-up enabled", kickoffDate:"Kickoff date", rampDate:"Ramp-up date", timelineMonths:"Timeline (months)", startFTE:"Start FTEs", targetFTE:"Target FTEs", rampMonths:"Ramp length (months)", probability:"Probability" };
   const fieldLabel = k => FIELD_LABELS[k] ?? k;
 
   const setField   = (i,f,v) => { logEdit("Present", CLIENTS[i].name, fieldLabel(f), cdata[i]?.[f], v); setCdata(p=>p.map((c,idx)=>idx===i?{...c,[f]:v}:c)); };
   const setWkFTE   = (wi,ci,v) => { logEdit("Past", `${weeks[wi]?.label} · ${CLIENTS[ci].short}`, "FTEs", weeks[wi]?.ftes[ci], v); setWeeks(p=>p.map((w,idx)=>{if(idx!==wi)return w;const f=[...w.ftes];f[ci]=v;return{...w,ftes:f};})); };
-  const addWeek    = () => { const nw=nextWeekInfo(weeks, CLIENTS.map((_,i)=>cdata[i]?.ftes??0)); logEdit("Past", "—", "Week added", "—", nw.label); setWeeks(p=>[...p,nw]); };
+  const addWeek    = () => { const nw=nextWeekInfo(weeks, CLIENTS.map((_,i)=>Math.round(derived[i]?.curFTEs??0))); logEdit("Past", "—", "Week added", "—", nw.label); setWeeks(p=>[...p,nw]); };
   const setPipeDoc = (i,v) => { logEdit("Future", CLIENTS[i].name, "Pipeline +docs", pipeline[i], v); setPipeline(p=>p.map((x,idx)=>idx===i?v:x)); };
   const addNC      = () => { logEdit("Future", "—", "Client added", "—", "New Client"); setNewClients(p=>[...p,{id:String(Date.now()),name:"New Client",leases:0,hoursPerLease:16,fteRate:ncFteRate,kickoffDate:"",rampDate:"",timelineMonths:6,startFTE:0,targetFTE:0,rampMonths:3,probability:"High"}]); };
   const updNC      = (id,patch) => { const cur=newClients.find(n=>n.id===id); Object.keys(patch).forEach(k=>logEdit("Future", cur?.name??id, fieldLabel(k), cur?.[k], patch[k])); setNewClients(p=>p.map(n=>n.id===id?{...n,...patch}:n)); };
@@ -762,7 +804,7 @@ function App() {
   function copyForSheets() {
     const rows=["RESOURCE CALCULATOR","Generated: "+new Date().toLocaleDateString(),""];
     rows.push("Client\t% Complete\tFTEs\tETA\tvs Baseline\tRem. Spend");
-    CLIENTS.forEach((c,i)=>{const dr=derived[i];rows.push([c.name,dr.d.pct+"%",dr.d.ftes,fmtDate(dr.eta),dr.delta===0?"On time":dr.delta>0?`+${dr.delta}d late`:`${Math.abs(dr.delta)}d early`,Math.round(dr.remSpend)].join("\t"));});
+    CLIENTS.forEach((c,i)=>{const dr=derived[i];rows.push([c.name,dr.d.pct+"%",Math.round(dr.curFTEs),fmtDate(dr.eta),dr.delta===0?"On time":dr.delta>0?`+${dr.delta}d late`:`${Math.abs(dr.delta)}d early`,Math.round(dr.remSpend)].join("\t"));});
     navigator.clipboard.writeText(rows.join("\n")).then(()=>{setCopyLabel("Copied!");setTimeout(()=>setCopyLabel("Export to Sheets"),2500);});
   }
 
@@ -956,7 +998,7 @@ function App() {
 
             {(()=>{
               const totalRem=derived.reduce((s,d)=>s+d.remSpend,0);
-              const addlFTEs=Math.max(0,Math.ceil(derived.reduce((s,d)=>s+(d.reqFTEs>d.d.ftes?d.reqFTEs-d.d.ftes:0),0)));
+              const addlFTEs=Math.max(0,Math.ceil(derived.reduce((s,d)=>s+(d.reqFTEs>d.curFTEs?d.reqFTEs-d.curFTEs:0),0)));
               const atRisk=CLIENTS.filter((_,i)=>derived[i].delta>0).length;
               return (
                 <div className="stat-row">
@@ -987,8 +1029,8 @@ function App() {
                     </thead>
                     <tbody>
                       {CLIENTS.map((c,i)=>{
-                        const {d,reqFTEs,delta,eta,proc,remSpend,wkLeft,impliedRate}=derived[i];
-                        const req=proc>0?Math.ceil(reqFTEs):0; const gap=req-d.ftes;
+                        const {d,reqFTEs,delta,eta,proc,remSpend,wkLeft,impliedRate,curFTEs}=derived[i];
+                        const req=proc>0?Math.ceil(reqFTEs):0; const cur=Math.round(curFTEs); const gap=req-cur;
                         const tone=delta>7||gap>3?"red":delta>0||gap>0?"amber":"";
                         return (
                           <tr key={c.name}>
@@ -997,7 +1039,7 @@ function App() {
                             <td className={tone}>{delta===0?"On time":delta>0?`+${delta}d late`:`${Math.abs(delta)}d early`}</td>
                             <td className="r muted">{wkLeft}</td>
                             <td className="r">{proc>0?req:"—"}</td>
-                            <td className="r">{d.ftes}</td>
+                            <td className="r">{cur}</td>
                             <td className={`r ${gap>0?"red":gap<0?"green":""}`}>{gap>0?`+${gap}`:gap<0?gap:"—"}</td>
                             <td className="r muted">{impliedRate.toFixed(1)}</td>
                             <td className="r">{fmtMoney(remSpend)}</td>
