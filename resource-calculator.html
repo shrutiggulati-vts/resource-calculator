@@ -618,7 +618,7 @@ const ClientCard = ({client, d, derived, onField, defaultOpen=false}) => {
 };
 
 // ── New-client (ramp) card ────────────────────────────────────────────────────
-const NCCard = ({nc, calc, ncFteRate, onUpd, onDel}) => {
+const NCCard = ({nc, calc, ncFteRate, onUpd, onDel, onToggleActive}) => {
   const [open, setOpen] = useState(false);
   const ready = nc.leases>0;
   const probTone = nc.probability==="High"?"green":nc.probability==="Medium"?"amber":"neutral";
@@ -638,6 +638,7 @@ const NCCard = ({nc, calc, ncFteRate, onUpd, onDel}) => {
             <span style={{fontSize:12,color:"var(--text)",fontWeight:500}}>{fmtMoney(calc.totalCost)}</span>
           </>
         ) : <span style={{fontSize:12,color:"var(--text3)"}}>Enter lease volume…</span>}
+        {onToggleActive && <button onClick={e=>{e.stopPropagation();onToggleActive();}} className="btn btn-ghost" style={{padding:"3px 10px",fontSize:11}}>{nc.active?"↩ Return to pipeline":"Activate →"}</button>}
         <button onClick={e=>{e.stopPropagation();onDel();}} style={{background:"none",border:"none",color:"var(--text3)",cursor:"pointer",fontSize:16,padding:"0 4px",lineHeight:1}}>×</button>
       </div>
       {open && (
@@ -746,6 +747,7 @@ function App() {
       targetFTE: raw.targetFTE ?? 0,          // 0 => use the auto-suggested target
       rampMonths: raw.rampMonths ?? 3,
       probability: PROBS.includes(raw.probability) ? raw.probability : "High",
+      active: raw.active ?? false,
     };
   }
 
@@ -776,6 +778,10 @@ function App() {
   }
 
   const normClients  = newClients.map(normNC);
+  const pipelineNC   = normClients.filter(nc=>!nc.active);   // shown in Future
+  const activeNC     = normClients.filter(nc=>nc.active);    // promoted into Present
+  const activeNCFtes = activeNC.reduce((s,nc)=>s+Math.round(calcNC(nc).currMonthly),0);
+  const activeNCSpend= activeNC.reduce((s,nc)=>s+calcNC(nc).totalCost,0);
   const totalFTEs    = derived.reduce((s,x)=>s+Math.round(x.curFTEs),0);
   const wkCostPerFTE = fteRate/4.33;
   const monthKeys    = [...new Set(weeks.map(w=>w.monthKey))];
@@ -788,14 +794,14 @@ function App() {
     setAuditLog(p => [{ts: Date.now(), view, target, field, from: f, to: t}, ...p].slice(0, 500));
   };
 
-  const FIELD_LABELS = { pct:"% Complete", ftes:"FTEs", docsets:"Docsets", masterLease:"Master Lease", masterAgreement:"Master Agreement", amendment:"Amendment", notice:"Notice", commencementLetter:"Commencement Letter", invalidDocs:"Invalid docs", doNotProcess:"Do not process", name:"Name", leases:"Leases", hoursPerLease:"Hrs/lease", days:"Days", startDate:"Start date", fteRate:"$/FTE/mo", rampOn:"Ramp-up enabled", kickoffDate:"Kickoff date", rampDate:"Ramp-up date", timelineMonths:"Timeline (months)", startFTE:"Start FTEs", targetFTE:"Target FTEs", rampMonths:"Ramp length (months)", probability:"Probability" };
+  const FIELD_LABELS = { pct:"% Complete", ftes:"FTEs", docsets:"Docsets", masterLease:"Master Lease", masterAgreement:"Master Agreement", amendment:"Amendment", notice:"Notice", commencementLetter:"Commencement Letter", invalidDocs:"Invalid docs", doNotProcess:"Do not process", name:"Name", leases:"Leases", hoursPerLease:"Hrs/lease", days:"Days", startDate:"Start date", fteRate:"$/FTE/mo", rampOn:"Ramp-up enabled", kickoffDate:"Kickoff date", rampDate:"Ramp-up date", timelineMonths:"Timeline (months)", startFTE:"Start FTEs", targetFTE:"Target FTEs", rampMonths:"Ramp length (months)", probability:"Probability", active:"Activated (moved to Present)" };
   const fieldLabel = k => FIELD_LABELS[k] ?? k;
 
   const setField   = (i,f,v) => { logEdit("Present", CLIENTS[i].name, fieldLabel(f), cdata[i]?.[f], v); setCdata(p=>p.map((c,idx)=>idx===i?{...c,[f]:v}:c)); };
   const setWkFTE   = (wi,ci,v) => { logEdit("Past", `${weeks[wi]?.label} · ${CLIENTS[ci].short}`, "FTEs", weeks[wi]?.ftes[ci], v); setWeeks(p=>p.map((w,idx)=>{if(idx!==wi)return w;const f=[...w.ftes];f[ci]=v;return{...w,ftes:f};})); };
   const addWeek    = () => { const nw=nextWeekInfo(weeks, CLIENTS.map((_,i)=>Math.round(derived[i]?.curFTEs??0))); logEdit("Past", "—", "Week added", "—", nw.label); setWeeks(p=>[...p,nw]); };
   const setPipeDoc = (i,v) => { logEdit("Future", CLIENTS[i].name, "Pipeline +docs", pipeline[i], v); setPipeline(p=>p.map((x,idx)=>idx===i?v:x)); };
-  const addNC      = () => { logEdit("Future", "—", "Client added", "—", "New Client"); setNewClients(p=>[...p,{id:String(Date.now()),name:"New Client",leases:0,hoursPerLease:16,fteRate:ncFteRate,kickoffDate:"",rampDate:"",timelineMonths:6,startFTE:0,targetFTE:0,rampMonths:3,probability:"High"}]); };
+  const addNC      = () => { logEdit("Future", "—", "Client added", "—", "New Client"); setNewClients(p=>[...p,{id:String(Date.now()),name:"New Client",leases:0,hoursPerLease:16,fteRate:ncFteRate,kickoffDate:"",rampDate:"",timelineMonths:6,startFTE:0,targetFTE:0,rampMonths:3,probability:"High",active:false}]); };
   const updNC      = (id,patch) => { const cur=newClients.find(n=>n.id===id); Object.keys(patch).forEach(k=>logEdit("Future", cur?.name??id, fieldLabel(k), cur?.[k], patch[k])); setNewClients(p=>p.map(n=>n.id===id?{...n,...patch}:n)); };
   const delNC      = id => { const nm=newClients.find(n=>n.id===id)?.name??id; logEdit("Future", nm, "Client removed", "active", "—"); setNewClients(p=>p.filter(n=>n.id!==id)); };
   const setRevenue = (k,v) => { const nm=CLIENTS.find(c=>c.name===k)?.name??(newClients.find(n=>n.id===k)?.name??k); logEdit("P&L", nm, "$/Docset", rev[k], v); setRev(p=>({...p,[k]:v})); };
@@ -966,9 +972,9 @@ function App() {
             </div>
 
             <div className="stat-row">
-              <Stat value={totalFTEs} label="Total FTEs deployed" tone={totalFTEs>15?"amber":undefined} />
+              <Stat value={totalFTEs+activeNCFtes} label="Total FTEs deployed" tone={totalFTEs+activeNCFtes>15?"amber":undefined} />
               <Stat value={`${CLIENTS.filter((_,i)=>derived[i].d.pct>=100).length}/${CLIENTS.length}`} label="Clients complete" />
-              <Stat value={fmtMoney(derived.reduce((s,d)=>s+d.remSpend,0))} label="Remaining spend" />
+              <Stat value={fmtMoney(derived.reduce((s,d)=>s+d.remSpend,0)+activeNCSpend)} label="Remaining spend" />
             </div>
 
             <div className="section">
@@ -983,6 +989,14 @@ function App() {
                 />
               ))}
             </div>
+            {activeNC.length>0 && (
+              <div className="section">
+                <div className="section-title">Now Active — from pipeline</div>
+                {activeNC.map(nc=>(
+                  <NCCard key={nc.id} nc={nc} calc={calcNC(nc)} ncFteRate={ncFteRate} onUpd={patch=>updNC(nc.id,patch)} onDel={()=>delNC(nc.id)} onToggleActive={()=>updNC(nc.id,{active:false})} />
+                ))}
+              </div>
+            )}
           </>
         )}
 
@@ -1104,17 +1118,17 @@ function App() {
                 </div>
               </div>
 
-              {normClients.length===0 ? (
+              {pipelineNC.length===0 ? (
                 <div style={{padding:"28px 20px",textAlign:"center",color:"var(--text3)",fontSize:13,background:"var(--surface)",border:"1px solid var(--border)",borderRadius:12}}>
-                  No new clients yet — click "+ Add client" to model resource needs
+                  {activeNC.length>0?"All new clients activated — see the Present view.":"No new clients yet — click \"+ Add client\" to model resource needs"}
                 </div>
               ) : (
                 <>
-                  {normClients.map(nc=>(
-                    <NCCard key={nc.id} nc={nc} calc={calcNC(nc)} ncFteRate={ncFteRate} onUpd={patch=>updNC(nc.id,patch)} onDel={()=>delNC(nc.id)} />
+                  {pipelineNC.map(nc=>(
+                    <NCCard key={nc.id} nc={nc} calc={calcNC(nc)} ncFteRate={ncFteRate} onUpd={patch=>updNC(nc.id,patch)} onDel={()=>delNC(nc.id)} onToggleActive={()=>updNC(nc.id,{active:true})} />
                   ))}
-                  {normClients.some(nc=>nc.leases>0)&&(()=>{
-                    const active   = normClients.filter(nc=>nc.leases>0).map(calcNC);
+                  {pipelineNC.some(nc=>nc.leases>0)&&(()=>{
+                    const active   = pipelineNC.filter(nc=>nc.leases>0).map(calcNC);
                     const newPeak  = active.reduce((s,c)=>s+c.target,0);
                     const spendMo  = active.reduce((s,c)=>s+c.monthlyCost,0);
                     const wPeak    = active.reduce((s,c)=>s+c.target*c.weight,0);
