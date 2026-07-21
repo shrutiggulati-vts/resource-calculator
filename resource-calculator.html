@@ -500,8 +500,22 @@ function rampSchedule(start, target, rampMonths, workFteDays, maxMonths=180) {
 }
 
 // Auto-suggested plateau team from remaining work and a target timeline.
-const suggestTarget = (workFteDays, timelineMonths) =>
-  workFteDays>0 ? Math.max(1, Math.round(workFteDays/(WORKDAYS_PER_MO*Math.max(1,timelineMonths)))) : 0;
+// Solve the plateau (target) FTE so a linear ramp (start->target over rampMonths,
+// then hold at target) delivers ALL the work within timelineMonths — i.e. the ramp
+// eats into the deadline, so target is sized up to compensate. Rounds up so the
+// deadline is met; ramp is capped at the timeline. Derivation:
+//   sum_{m=0..T-1} FTE(m) = S*(R+1)/2 + target*(T-(R+1)/2) = workFteMonths
+const suggestTarget = (workFteDays, timelineMonths, startFTE=0, rampMonths=0) => {
+  if (!(workFteDays>0)) return 0;
+  const M = workFteDays/WORKDAYS_PER_MO;              // FTE-months of work needed
+  const T = Math.max(1, timelineMonths);
+  const R = Math.min(Math.max(0, rampMonths), T);     // cap ramp at the timeline
+  const S = Math.max(0, startFTE);
+  let tgt;
+  if (R<=0) tgt = M/T;                                // no ramp => flat
+  else { const denom = T-(R+1)/2; tgt = denom>0 ? (M - S*(R+1)/2)/denom : M/T; }
+  return Math.max(Math.max(1,S), Math.ceil(tgt));     // ramp-up: never below start
+};
 
 function nextWeekInfo(weeks, seedFtes) {
   // New weeks seed their per-client FTEs from the current Present deployment
@@ -532,7 +546,7 @@ const Badge = ({children, tone="neutral"}) => (
 // ── Collapsible client card ───────────────────────────────────────────────────
 const ClientCard = ({client, d, derived, onField, defaultOpen=false}) => {
   const [open, setOpen] = useState(defaultOpen);
-  const {total, proc, impliedRate, eta, delta, thru, curFTEs, rampOn, monthlyFTEs, monthsToDone} = derived;
+  const {total, proc, impliedRate, eta, delta, thru, curFTEs, rampOn, monthlyFTEs, monthsToDone, targetSugg} = derived;
   const badge = d.pct>=100 ? "green" : delta>7 ? "red" : delta>0 ? "amber" : "neutral";
   const badgeLabel = d.pct>=100 ? "Complete" : delta>0 ? `+${delta}d late` : delta<0 ? `${Math.abs(delta)}d early` : "On track";
 
@@ -595,7 +609,7 @@ const ClientCard = ({client, d, derived, onField, defaultOpen=false}) => {
             <>
               <div className="field-grid cols3">
                 <div><div className="field-label">Start FTEs</div><input type="number" value={d.startFTE??0} onChange={e=>onField("startFTE",p0(e.target.value))} style={{width:72}} /></div>
-                <div><div className="field-label">Target FTEs (blank = {d.ftes})</div><input type="number" value={d.targetFTE>0?d.targetFTE:""} onChange={e=>onField("targetFTE",p0(e.target.value))} placeholder={String(d.ftes)} style={{width:72}} /></div>
+                <div><div className="field-label">Target FTEs (sugg. {targetSugg})</div><input type="number" value={d.targetFTE>0?d.targetFTE:""} onChange={e=>onField("targetFTE",p0(e.target.value))} placeholder={String(targetSugg)} style={{width:72}} /></div>
                 <div><div className="field-label">Ramp length (months)</div><input type="number" value={d.rampMonths??0} onChange={e=>onField("rampMonths",p0(e.target.value))} style={{width:72}} /></div>
                 <div><div className="field-label">Ramp start date</div><input type="date" value={d.rampDate??""} onChange={e=>onField("rampDate",e.target.value)} style={{width:"100%",fontSize:12}} /></div>
               </div>
@@ -713,9 +727,11 @@ function App() {
     // FTE ramp (opt-in per client via d.rampOn). Off => original flat behavior, zero change.
     const rampOn   = !!d.rampOn;
     const rStart   = Math.max(0, d.startFTE??0);
-    const rTarget  = d.targetFTE>0 ? d.targetFTE : (d.ftes||0);
-    const rMonths  = Math.max(0, d.rampMonths??0);
     const rDate    = d.rampDate ? new Date(d.rampDate+"T00:00:00") : new Date(TODAY);
+    const rTimeline= Math.max(1, monthIndex(rDate, c.base));       // months from ramp start to baseline deadline
+    const rMonths  = Math.min(Math.max(0, d.rampMonths??0), rTimeline);
+    const rSugg    = suggestTarget(fteDays, rTimeline, rStart, rMonths);  // target solved to hit baseline
+    const rTarget  = d.targetFTE>0 ? d.targetFTE : rSugg;
     const rSched   = rampOn ? rampSchedule(rStart, rTarget, rMonths, fteDays) : null;
     const curFTEs  = rampOn ? rampFTE(monthIndex(rDate,TODAY), rStart, rTarget, rMonths) : d.ftes;
     const monthlyFTEs  = rSched ? rSched.monthlyFTEs : [];
@@ -732,7 +748,7 @@ function App() {
     const revenue  = d.docsets*(rev[c.name]??0);
     const profit   = revenue-remSpend;
     const margin   = revenue>0?profit/revenue:0;
-    return {d,total,proc,fteDays,impliedRate,wkLeft,reqFTEs,eta,delta,wkdWkd,docsDone,thru,remMos,remSpend,revenue,profit,margin,rampOn,curFTEs,monthlyFTEs,monthsToDone,weight};
+    return {d,total,proc,fteDays,impliedRate,wkLeft,reqFTEs,eta,delta,wkdWkd,docsDone,thru,remMos,remSpend,revenue,profit,margin,rampOn,curFTEs,monthlyFTEs,monthsToDone,weight,targetSugg:rSugg,rTimeline};
   });
 
   function normNC(raw) {
@@ -754,10 +770,10 @@ function App() {
   function calcNC(nc) {
     const effectiveRate = nc.hoursPerLease>0?8/nc.hoursPerLease:ncRate;      // leases / FTE / day
     const workFteDays   = (nc.leases>0 && effectiveRate>0) ? nc.leases/effectiveRate : 0;
-    const suggTarget    = suggestTarget(workFteDays, nc.timelineMonths);
-    const target        = nc.targetFTE>0 ? nc.targetFTE : suggTarget;
     const start         = Math.max(0, nc.startFTE||0);
-    const rampMonths    = Math.max(0, nc.rampMonths||0);
+    const rampMonths    = Math.min(Math.max(0, nc.rampMonths||0), Math.max(1, nc.timelineMonths||1));  // capped at timeline
+    const suggTarget    = suggestTarget(workFteDays, nc.timelineMonths, start, rampMonths);
+    const target        = nc.targetFTE>0 ? nc.targetFTE : suggTarget;
     const rampStart     = nc.rampDate ? new Date(nc.rampDate+"T00:00:00")
                         : nc.kickoffDate ? new Date(nc.kickoffDate+"T00:00:00") : new Date(TODAY);
     const sched         = rampSchedule(start, target, rampMonths, workFteDays);
