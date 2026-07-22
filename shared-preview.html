@@ -1,0 +1,1388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Resource Calculator — SHARED PREVIEW</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #f7f6f3;
+      --surface:   #ffffff;
+      --border:    #e4e2dc;
+      --border2:   #d0cdc4;
+      --text:      #1a1916;
+      --text2:     #6b6760;
+      --text3:     #a09d98;
+      --accent:    #1a1916;
+      --green:     #1a6645;
+      --green-bg:  #edf7f2;
+      --amber:     #92510a;
+      --amber-bg:  #fef8ee;
+      --red:       #8f1f1f;
+      --red-bg:    #fdf2f2;
+      --blue:      #1a3a6e;
+      --blue-bg:   #f0f4fb;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Geist', system-ui, sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+      min-height: 100vh;
+    }
+
+    /* ── Layout ── */
+    .app { display: flex; min-height: 100vh; }
+
+    .sidebar {
+      width: 220px;
+      flex-shrink: 0;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      padding: 32px 0;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .sidebar-brand {
+      padding: 0 24px 28px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 20px;
+    }
+
+    .sidebar-brand h1 {
+      font-family: 'Instrument Serif', serif;
+      font-size: 20px;
+      font-weight: 400;
+      color: var(--text);
+      line-height: 1.2;
+    }
+
+    .sidebar-brand p {
+      font-size: 11px;
+      color: var(--text3);
+      margin-top: 3px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .nav-section {
+      padding: 0 12px;
+      margin-bottom: 4px;
+    }
+
+    .nav-label {
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text3);
+      padding: 0 12px;
+      margin-bottom: 4px;
+      margin-top: 16px;
+    }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 400;
+      color: var(--text2);
+      transition: all 0.12s;
+      border: none;
+      background: none;
+      width: 100%;
+      text-align: left;
+      font-family: inherit;
+    }
+
+    .nav-item:hover { background: var(--bg); color: var(--text); }
+    .nav-item.active { background: var(--bg); color: var(--text); font-weight: 500; }
+    .nav-item .dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--border2); flex-shrink: 0;
+      transition: background 0.12s;
+    }
+    .nav-item.active .dot { background: var(--text); }
+
+    .sidebar-footer {
+      margin-top: auto;
+      padding: 20px 24px 0;
+      border-top: 1px solid var(--border);
+    }
+
+    .main {
+      flex: 1;
+      min-width: 0;
+      padding: 40px 48px;
+      width: 100%;
+      max-width: 1800px;
+      margin: 0 auto;
+    }
+
+    /* ── Page header ── */
+    .page-header {
+      margin-bottom: 32px;
+      padding-bottom: 24px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .page-title {
+      font-family: 'Instrument Serif', serif;
+      font-size: 28px;
+      font-weight: 400;
+      color: var(--text);
+      line-height: 1.1;
+    }
+
+    .page-sub {
+      font-size: 12px;
+      color: var(--text3);
+      margin-top: 4px;
+    }
+
+    /* ── Stat cards ── */
+    .stat-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-bottom: 32px;
+    }
+
+    .stat-row.cols-4 { grid-template-columns: repeat(4, 1fr); }
+
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 18px 20px;
+    }
+
+    .stat-value {
+      font-family: 'Instrument Serif', serif;
+      font-size: 30px;
+      line-height: 1;
+      color: var(--text);
+    }
+
+    .stat-value.green { color: var(--green); }
+    .stat-value.amber { color: var(--amber); }
+    .stat-value.red   { color: var(--red);   }
+
+    .stat-label {
+      font-size: 11px;
+      color: var(--text3);
+      margin-top: 6px;
+      letter-spacing: 0.02em;
+    }
+
+    /* ── Section ── */
+    .section { margin-bottom: 36px; }
+
+    .section-title {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text3);
+      margin-bottom: 12px;
+    }
+
+    /* ── Table ── */
+    .table-wrap { overflow-x: auto; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    thead th {
+      text-align: left;
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text3);
+      letter-spacing: 0.04em;
+      padding: 0 12px 10px;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+
+    thead th.r { text-align: right; }
+
+    tbody tr { border-bottom: 1px solid var(--border); transition: background 0.1s; }
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: var(--bg); }
+
+    tbody td {
+      padding: 11px 12px;
+      color: var(--text);
+      white-space: nowrap;
+    }
+
+    tbody td.r { text-align: right; }
+    tbody td.muted { color: var(--text3); }
+    tbody td.bold { font-weight: 600; }
+    tbody td.green { color: var(--green); font-weight: 500; }
+    tbody td.amber { color: var(--amber); }
+    tbody td.red   { color: var(--red); font-weight: 500; }
+
+    .table-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    /* ── Inputs ── */
+    input[type=text], input[type=number], input[type=date] {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      padding: 5px 8px;
+      font-size: 13px;
+      font-family: inherit;
+      outline: none;
+      transition: border 0.12s;
+    }
+
+    input:focus { border-color: var(--text); }
+    input[type=number] { text-align: right; }
+    input::placeholder { color: var(--text3); }
+    input[type=number]::-webkit-inner-spin-button { opacity: 0.4; }
+
+    /* ── Buttons ── */
+    .btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 7px 14px; border-radius: 8px; font-size: 12px;
+      font-weight: 500; cursor: pointer; border: none;
+      font-family: inherit; transition: all 0.12s; letter-spacing: 0.01em;
+    }
+
+    .btn-primary { background: var(--text); color: white; }
+    .btn-primary:hover { background: #333; }
+    .btn-ghost {
+      background: transparent; color: var(--text2);
+      border: 1px solid var(--border);
+    }
+    .btn-ghost:hover { background: var(--bg); color: var(--text); border-color: var(--border2); }
+
+    /* ── Badges ── */
+    .badge {
+      display: inline-flex; align-items: center;
+      padding: 2px 8px; border-radius: 20px;
+      font-size: 11px; font-weight: 500; white-space: nowrap;
+    }
+
+    .badge-green  { background: var(--green-bg);  color: var(--green); }
+    .badge-amber  { background: var(--amber-bg);  color: var(--amber); }
+    .badge-red    { background: var(--red-bg);    color: var(--red);   }
+    .badge-blue   { background: var(--blue-bg);   color: var(--blue);  }
+    .badge-neutral{ background: var(--bg);        color: var(--text2); border: 1px solid var(--border); }
+
+    /* ── Collapsible client card ── */
+    .client-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      margin-bottom: 8px;
+      overflow: hidden;
+    }
+
+    .client-card-header {
+      display: flex; align-items: center; gap: 12px;
+      padding: 14px 20px; cursor: pointer;
+      transition: background 0.1s;
+    }
+
+    .client-card-header:hover { background: var(--bg); }
+
+    .client-card-header .name {
+      font-size: 14px; font-weight: 500; flex: 1;
+    }
+
+    .client-card-body {
+      padding: 0 20px 20px;
+      border-top: 1px solid var(--border);
+    }
+
+    .field-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+      margin-top: 16px;
+    }
+
+    .field-grid.cols3 { grid-template-columns: repeat(3, 1fr); }
+
+    .field-label {
+      font-size: 11px;
+      color: var(--text3);
+      margin-bottom: 5px;
+      letter-spacing: 0.03em;
+    }
+
+    /* ── Divider ── */
+    .divider { border: none; border-top: 1px solid var(--border); margin: 24px 0; }
+
+    /* ── Row util ── */
+    .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .spacer { flex: 1; }
+
+    /* ── Week table inputs ── */
+    .week-input { width: 56px; }
+
+    /* ── New client row grid ── */
+    .nc-grid {
+      display: grid;
+      grid-template-columns: minmax(140px,1.6fr) repeat(9, minmax(60px,1fr)) 28px;
+      gap: 0 8px;
+      align-items: center;
+      padding: 8px 16px;
+    }
+
+    .nc-grid input { width: 100%; }
+
+    .nc-header {
+      font-size: 11px;
+      color: var(--text3);
+      letter-spacing: 0.03em;
+      padding: 0 16px 8px;
+      display: grid;
+      grid-template-columns: minmax(140px,1.6fr) repeat(9, minmax(60px,1fr)) 28px;
+      gap: 0 8px;
+    }
+
+    .nc-header span { text-align: right; }
+    .nc-header span:first-child { text-align: left; }
+
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+
+    /* ── Rate inputs in header ── */
+    .rate-row { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+    .rate-group { display: flex; align-items: center; gap: 6px; }
+    .rate-group label { font-size: 11px; color: var(--text3); white-space: nowrap; }
+    .rate-group input { width: 72px; }
+
+    @media (max-width: 1100px) {
+      .main { padding: 32px 28px; }
+    }
+
+    @media (max-width: 768px) {
+      .sidebar { display: none; }
+      .main { padding: 24px 20px; }
+    }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useEffect } = React;
+
+const LS_KEY = "resourceCalculator.v1";
+function loadStored() { try { return JSON.parse(localStorage.getItem(LS_KEY)||"{}") || {}; } catch(_) { return {}; } }
+
+// ── Constants ────────────────────────────────────────────────────────────────
+const MO = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+const CLIENTS = [
+  { name:"Nuveen",             short:"Nuveen",  pct:5,  defFTE:5, docs:82,   docsets:22, initFteDays:10,  base:new Date(2026,4,8)  },
+  { name:"MIT Cambridge",      short:"MIT",     pct:33, defFTE:1, docs:97,   docsets:6,  initFteDays:1,   base:new Date(2026,4,5)  },
+  { name:"Trump Organization", short:"Trump",   pct:15, defFTE:2, docs:55,   docsets:26, initFteDays:24,  base:new Date(2026,4,22) },
+  { name:"Granite Properties", short:"Granite", pct:17, defFTE:1, docs:312,  docsets:59, initFteDays:82,  base:new Date(2026,5,19) },
+  { name:"RXR Realty",         short:"RXR",     pct:14, defFTE:2, docs:1526, docsets:38, initFteDays:189, base:new Date(2026,6,3)  },
+];
+
+const DOC_TYPES = [
+  { key:"masterLease",        label:"Master Lease"        },
+  { key:"masterAgreement",    label:"Master Agreement"    },
+  { key:"amendment",          label:"Amendment"           },
+  { key:"notice",             label:"Notice"              },
+  { key:"commencementLetter", label:"Commencement Letter" },
+];
+
+const MONTH_NAMES = {jan:"January",feb:"February",mar:"March",apr:"April",may:"May",jun:"June",jul:"July",aug:"August",sep:"September",oct:"October",nov:"November",dec:"December"};
+
+const INIT_WEEKS = [
+  { label:"Apr 13", monthKey:"apr2026", ftes:[3,1,1,1,2] },
+  { label:"Apr 20", monthKey:"apr2026", ftes:[4,1,1,1,2] },
+  { label:"Apr 27", monthKey:"apr2026", ftes:[5,1,1,1,2] },
+  { label:"May 4",  monthKey:"may2026", ftes:[5,1,2,1,2] },
+];
+
+const clientDefaults = () => CLIENTS.map(c => ({
+  ftes:c.defFTE, pct:c.pct, docsets:c.docsets,
+  masterLease:c.docs, masterAgreement:0, amendment:0,
+  notice:0, commencementLetter:0, invalidDocs:0, doNotProcess:0,
+  rampOn:false, startFTE:1, targetFTE:0, rampMonths:3, rampDate:"",
+}));
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+function addWorkDays(from, days) {
+  const d=new Date(from); let a=0; const n=Math.ceil(Math.max(0,days));
+  while(a<n){d.setDate(d.getDate()+1);if(d.getDay()!==0&&d.getDay()!==6)a++;}
+  return d;
+}
+function workDaysUntil(from, to) {
+  if(to<=from) return 0; let c=0; const d=new Date(from);
+  while(d<to){d.setDate(d.getDate()+1);if(d.getDay()!==0&&d.getDay()!==6)c++;}
+  return c;
+}
+const calToWork = c => Math.max(1,Math.round(c*5/7));
+const fmtDate   = d => MO[d.getMonth()]+" "+d.getDate()+", "+d.getFullYear();
+const fmtMoney  = n => "$"+Math.round(n).toLocaleString();
+const fmtPct    = n => Math.round(n*100)+"%";
+const p0 = s => { const n=parseInt(s,10); return isNaN(n)||n<0?0:n; };
+const pf = (s,def) => { const n=parseFloat(s); return isNaN(n)||n<=0?def:n; };
+const mlabel = k => (MONTH_NAMES[k.slice(0,3)]??k.slice(0,3))+" "+k.slice(3);
+
+// ── FTE ramp engine ────────────────────────────────────────────────────────
+// Probability-of-close weights for risk-adjusted portfolio views.
+const PROB_WEIGHT = { High:0.9, Medium:0.5, Low:0.2 };
+const PROBS = ["High","Medium","Low"];
+const WORKDAYS_PER_MO = 22;
+
+const addCalMonths = (d,n) => { const x=new Date(d); x.setMonth(x.getMonth()+Math.round(n)); return x; };
+const monthIndex   = (from,to) => (to.getFullYear()-from.getFullYear())*12 + (to.getMonth()-from.getMonth());
+
+// Headcount for month index m (0 = first ramp month): linear start->target over
+// rampMonths, then held flat at target. Before the ramp begins (m<0) => 0.
+function rampFTE(m, start, target, rampMonths) {
+  if (m < 0) return 0;
+  const R = Math.max(0, rampMonths||0);
+  if (R === 0 || m >= R) return Math.max(0,target);
+  return Math.max(0, start + (target - start) * (m / R));
+}
+
+// Walk the ramp month-by-month until `workFteDays` of capacity is delivered
+// (each FTE clears WORKDAYS_PER_MO productive days/month). Returns the month
+// count to completion, the summed FTE-months (for cost), and the monthly curve.
+function rampSchedule(start, target, rampMonths, workFteDays, maxMonths=180) {
+  if (!(workFteDays>0) || !((target>0)||(start>0))) return {months:0,totalFteMonths:0,monthlyFTEs:[],done:false};
+  const monthlyFTEs=[]; let cum=0, months=0, totalFteMonths=0, done=false;
+  for (let m=0; m<maxMonths; m++) {
+    const fte = rampFTE(m, start, target, rampMonths);
+    monthlyFTEs.push(fte);
+    const cap = fte*WORKDAYS_PER_MO;
+    if (cap>0 && cum+cap >= workFteDays) {           // final month is partial — prorate it
+      const frac = (workFteDays-cum)/cap;
+      totalFteMonths += fte*frac; months = m+frac; done=true; break;
+    }
+    cum += cap; totalFteMonths += fte; months = m+1;
+  }
+  return {months, totalFteMonths, monthlyFTEs, done};
+}
+
+// Auto-suggested plateau team from remaining work and a target timeline.
+// Solve the plateau (target) FTE so a linear ramp (start->target over rampMonths,
+// then hold at target) delivers ALL the work within timelineMonths — i.e. the ramp
+// eats into the deadline, so target is sized up to compensate. Rounds up so the
+// deadline is met; ramp is capped at the timeline. Derivation:
+//   sum_{m=0..T-1} FTE(m) = S*(R+1)/2 + target*(T-(R+1)/2) = workFteMonths
+const suggestTarget = (workFteDays, timelineMonths, startFTE=0, rampMonths=0) => {
+  if (!(workFteDays>0)) return 0;
+  const M = workFteDays/WORKDAYS_PER_MO;              // FTE-months of work needed
+  const T = Math.max(1, timelineMonths);
+  const R = Math.min(Math.max(0, rampMonths), T);     // cap ramp at the timeline
+  const S = Math.max(0, startFTE);
+  let tgt;
+  if (R<=0) tgt = M/T;                                // no ramp => flat
+  else { const denom = T-(R+1)/2; tgt = denom>0 ? (M - S*(R+1)/2)/denom : M/T; }
+  return Math.max(Math.max(1,S), Math.ceil(tgt));     // ramp-up: never below start
+};
+
+function nextWeekInfo(weeks, seedFtes) {
+  // New weeks seed their per-client FTEs from the current Present deployment
+  // (Phase 3: Present drives Past). Already-entered weeks stay as typed.
+  const seed = seedFtes ?? CLIENTS.map(()=>0);
+  if(!weeks.length) return {label:"May 18",monthKey:"may2026",ftes:[...seed]};
+  const last=weeks[weeks.length-1]; const parts=last.label.split(" ");
+  const mIdx=MO.indexOf(parts[0]);
+  if(mIdx===-1) return {label:"",monthKey:last.monthKey,ftes:[...seed]};
+  const next=new Date(2026,mIdx,parseInt(parts[1])+7);
+  const ms=MO[next.getMonth()].toLowerCase().slice(0,3);
+  return {label:`${MO[next.getMonth()]} ${next.getDate()}`,monthKey:`${ms}${next.getFullYear()}`,ftes:[...seed]};
+}
+
+// ── Stat card ────────────────────────────────────────────────────────────────
+const Stat = ({value, label, tone}) => (
+  <div className="stat-card">
+    <div className={`stat-value${tone==="green"?" green":tone==="amber"?" amber":tone==="red"?" red":""}`}>{value}</div>
+    <div className="stat-label">{label}</div>
+  </div>
+);
+
+// ── Badge ─────────────────────────────────────────────────────────────────────
+const Badge = ({children, tone="neutral"}) => (
+  <span className={`badge badge-${tone}`}>{children}</span>
+);
+
+// ── Collapsible client card ───────────────────────────────────────────────────
+const ClientCard = ({client, d, derived, onField, defaultOpen=false}) => {
+  const [open, setOpen] = useState(defaultOpen);
+  const {total, proc, impliedRate, eta, delta, thru, curFTEs, rampOn, monthlyFTEs, monthsToDone, targetSugg} = derived;
+  const badge = d.pct>=100 ? "green" : delta>7 ? "red" : delta>0 ? "amber" : "neutral";
+  const badgeLabel = d.pct>=100 ? "Complete" : delta>0 ? `+${delta}d late` : delta<0 ? `${Math.abs(delta)}d early` : "On track";
+
+  return (
+    <div className="client-card">
+      <div className="client-card-header" onClick={()=>setOpen(o=>!o)}>
+        <span style={{fontSize:11,color:"var(--text3)",width:12}}>{open?"▾":"▸"}</span>
+        <span className="name">{client.name}</span>
+        <Badge tone={badge}>{badgeLabel}</Badge>
+        <span style={{fontSize:12,color:"var(--text3)"}}>{d.pct}% done</span>
+        <span style={{fontSize:12,color:"var(--text2)"}}>ETA {fmtDate(eta)}</span>
+        <span style={{fontSize:12,color:"var(--text3)"}}>{Math.round(curFTEs)} FTE{Math.round(curFTEs)!==1?"s":""}{rampOn?" · ramping":""}</span>
+      </div>
+      {open && (
+        <div className="client-card-body">
+          <div className="field-grid cols3" style={{marginBottom:16}}>
+            <div>
+              <div className="field-label">% Complete</div>
+              <input type="number" value={d.pct} onChange={e=>onField("pct",Math.min(100,p0(e.target.value)))} style={{width:72}} />
+            </div>
+            <div>
+              <div className="field-label">FTEs assigned</div>
+              <input type="number" value={d.ftes} onChange={e=>onField("ftes",p0(e.target.value))} style={{width:72}} />
+            </div>
+            <div>
+              <div className="field-label">Docsets</div>
+              <input type="number" value={d.docsets} onChange={e=>onField("docsets",p0(e.target.value))} style={{width:72}} />
+            </div>
+          </div>
+          <div style={{fontSize:11,color:"var(--text3)",marginBottom:8,letterSpacing:"0.03em"}}>Documents by type</div>
+          <div className="field-grid">
+            {DOC_TYPES.map(({key,label})=>(
+              <div key={key} className="row" style={{gap:8}}>
+                <span style={{fontSize:12,color:"var(--text2)",minWidth:148}}>{label}</span>
+                <input type="number" value={d[key]} onChange={e=>onField(key,p0(e.target.value))} style={{width:72}} />
+              </div>
+            ))}
+          </div>
+          <div className="row" style={{marginTop:12,gap:20}}>
+            <div className="row" style={{gap:6}}>
+              <span style={{fontSize:12,color:"var(--text3)"}}>Invalid:</span>
+              <input type="number" value={d.invalidDocs} onChange={e=>onField("invalidDocs",p0(e.target.value))} style={{width:64}} />
+            </div>
+            <div className="row" style={{gap:6}}>
+              <span style={{fontSize:12,color:"var(--text3)"}}>Do not process:</span>
+              <input type="number" value={d.doNotProcess} onChange={e=>onField("doNotProcess",p0(e.target.value))} style={{width:64}} />
+            </div>
+            <span style={{fontSize:12,color:"var(--text3)"}}>Total: <strong style={{color:"var(--text)"}}>{total.toLocaleString()}</strong></span>
+          </div>
+          <hr className="divider" style={{margin:"16px 0"}} />
+          <div className="row" style={{gap:24}}>
+            <div><div className="field-label">Implied rate</div><strong style={{fontSize:15}}>{impliedRate.toFixed(1)}</strong><span style={{fontSize:11,color:"var(--text3)"}}> d/FTE/d</span></div>
+            <div><div className="field-label">Observed throughput</div><strong style={{fontSize:15}}>{thru>0?thru.toFixed(1):"—"}</strong>{thru>0&&<span style={{fontSize:11,color:"var(--text3)"}}> d/FTE/d</span>}</div>
+          </div>
+          <hr className="divider" style={{margin:"16px 0"}} />
+          <label className="row" style={{gap:6,cursor:"pointer",fontSize:13,marginBottom:12}}>
+            <input type="checkbox" checked={!!d.rampOn} onChange={e=>onField("rampOn",e.target.checked)} /> Model FTE ramp-up
+          </label>
+          {d.rampOn && (
+            <>
+              <div className="field-grid cols3">
+                <div><div className="field-label">Start FTEs</div><input type="number" value={d.startFTE??0} onChange={e=>onField("startFTE",p0(e.target.value))} style={{width:72}} /></div>
+                <div><div className="field-label">Target FTEs (sugg. {targetSugg})</div><input type="number" value={d.targetFTE>0?d.targetFTE:""} onChange={e=>onField("targetFTE",p0(e.target.value))} placeholder={String(targetSugg)} style={{width:72}} /></div>
+                <div><div className="field-label">Ramp length (months)</div><input type="number" value={d.rampMonths??0} onChange={e=>onField("rampMonths",p0(e.target.value))} style={{width:72}} /></div>
+                <div><div className="field-label">Ramp start date</div><input type="date" value={d.rampDate??""} onChange={e=>onField("rampDate",e.target.value)} style={{width:"100%",fontSize:12}} /></div>
+              </div>
+              <div className="row" style={{marginTop:12,gap:24,flexWrap:"wrap"}}>
+                <div><div className="field-label">Current-month FTEs</div><strong style={{fontSize:15}}>{Math.round(curFTEs)}</strong></div>
+                <div><div className="field-label">Months to done</div><strong style={{fontSize:15}}>{monthsToDone!=null?Math.ceil(monthsToDone):"—"}</strong></div>
+              </div>
+              {monthlyFTEs.length>0 && (
+                <div style={{marginTop:10,fontSize:12,color:"var(--text2)"}}>
+                  <span style={{color:"var(--text3)"}}>Monthly ramp: </span>
+                  {monthlyFTEs.slice(0,10).map(v=>Math.round(v)).join(" → ")}{monthlyFTEs.length>10?" …":""}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ── New-client (ramp) card ────────────────────────────────────────────────────
+const NCCard = ({nc, calc, ncFteRate, onUpd, onDel, onToggleActive}) => {
+  const [open, setOpen] = useState(false);
+  const ready = nc.leases>0;
+  const probTone = nc.probability==="High"?"green":nc.probability==="Medium"?"amber":"neutral";
+  const fld = (label, input) => (<div><div className="field-label">{label}</div>{input}</div>);
+  return (
+    <div className="client-card">
+      <div className="client-card-header" onClick={()=>setOpen(o=>!o)}>
+        <span style={{fontSize:11,color:"var(--text3)",width:12}}>{open?"▾":"▸"}</span>
+        <input value={nc.name} onClick={e=>e.stopPropagation()} onChange={e=>onUpd({name:e.target.value})}
+               style={{fontWeight:500,border:"none",background:"none",flex:"0 0 170px",fontSize:14,padding:0}} />
+        <Badge tone={probTone}>{nc.probability}</Badge>
+        <div className="spacer" />
+        {ready ? (
+          <>
+            <span style={{fontSize:12,color:"var(--text3)"}}>→ {calc.target} FTEs</span>
+            <span style={{fontSize:12,color:"var(--text2)"}}>done {fmtDate(calc.eta)}</span>
+            <span style={{fontSize:12,color:"var(--text)",fontWeight:500}}>{fmtMoney(calc.totalCost)}</span>
+          </>
+        ) : <span style={{fontSize:12,color:"var(--text3)"}}>Enter lease volume…</span>}
+        {onToggleActive && <button onClick={e=>{e.stopPropagation();onToggleActive();}} className="btn btn-ghost" style={{padding:"3px 10px",fontSize:11}}>{nc.active?"↩ Return to pipeline":"Activate →"}</button>}
+        <button onClick={e=>{e.stopPropagation();onDel();}} style={{background:"none",border:"none",color:"var(--text3)",cursor:"pointer",fontSize:16,padding:"0 4px",lineHeight:1}}>×</button>
+      </div>
+      {open && (
+        <div className="client-card-body">
+          <div className="field-grid cols3" style={{marginTop:16}}>
+            {fld("Lease volume", <input type="number" value={nc.leases>0?nc.leases:""} onChange={e=>onUpd({leases:p0(e.target.value)})} placeholder="e.g. 5750" style={{width:"100%"}} />)}
+            {fld("Hrs / lease", <input type="number" value={nc.hoursPerLease>0?nc.hoursPerLease:""} onChange={e=>onUpd({hoursPerLease:pf(e.target.value,0)})} placeholder="16" style={{width:"100%"}} />)}
+            {fld("$ / FTE / mo", <input type="number" value={nc.fteRate>0?nc.fteRate:""} onChange={e=>onUpd({fteRate:p0(e.target.value)||ncFteRate})} placeholder={String(ncFteRate)} style={{width:"100%"}} />)}
+            {fld("Kickoff date", <input type="date" value={nc.kickoffDate} onChange={e=>onUpd({kickoffDate:e.target.value})} style={{width:"100%",fontSize:12}} />)}
+            {fld("Staff ramp-up date", <input type="date" value={nc.rampDate} onChange={e=>onUpd({rampDate:e.target.value})} style={{width:"100%",fontSize:12}} />)}
+            {fld("Timeline (months)", <input type="number" value={nc.timelineMonths>0?nc.timelineMonths:""} onChange={e=>onUpd({timelineMonths:p0(e.target.value)})} placeholder="6" style={{width:"100%"}} />)}
+            {fld("Start FTEs", <input type="number" value={nc.startFTE>0?nc.startFTE:""} onChange={e=>onUpd({startFTE:p0(e.target.value)})} placeholder="0" style={{width:"100%"}} />)}
+            {fld(`Target FTEs${calc.suggTarget?` (sugg. ${calc.suggTarget})`:""}`, <input type="number" value={nc.targetFTE>0?nc.targetFTE:""} onChange={e=>onUpd({targetFTE:p0(e.target.value)})} placeholder={calc.suggTarget?String(calc.suggTarget):"auto"} style={{width:"100%"}} />)}
+            {fld("Ramp length (months)", <input type="number" value={nc.rampMonths>0?nc.rampMonths:""} onChange={e=>onUpd({rampMonths:p0(e.target.value)})} placeholder="3" style={{width:"100%"}} />)}
+            {fld("Probability", <select value={nc.probability} onChange={e=>onUpd({probability:e.target.value})} style={{width:"100%",background:"var(--bg)",border:"1px solid var(--border)",borderRadius:6,padding:"5px 8px",font:"inherit",color:"var(--text)",cursor:"pointer"}}>{PROBS.map(p=><option key={p} value={p}>{p}</option>)}</select>)}
+          </div>
+          {ready && (
+            <>
+              <hr className="divider" style={{margin:"16px 0"}} />
+              <div className="row" style={{gap:24,flexWrap:"wrap"}}>
+                <div><div className="field-label">Throughput</div><strong style={{fontSize:15}}>{Math.round(calc.effectiveRate*WORKDAYS_PER_MO)}</strong><span style={{fontSize:11,color:"var(--text3)"}}> leases/FTE/mo</span></div>
+                <div><div className="field-label">Current-month FTEs</div><strong style={{fontSize:15}}>{Math.round(calc.currMonthly)}</strong></div>
+                <div><div className="field-label">Months to done</div><strong style={{fontSize:15}}>{Math.ceil(calc.monthsToDone)}</strong></div>
+                <div><div className="field-label">Total cost</div><strong style={{fontSize:15}}>{fmtMoney(calc.totalCost)}</strong></div>
+              </div>
+              {calc.monthlyFTEs.length>0 && (
+                <div style={{marginTop:12,fontSize:12,color:"var(--text2)"}}>
+                  <span style={{color:"var(--text3)"}}>Monthly ramp: </span>
+                  {calc.monthlyFTEs.slice(0,10).map(v=>Math.round(v)).join(" → ")}{calc.monthlyFTEs.length>10?" …":""}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ── Main app ─────────────────────────────────────────────────────────────────
+function App() {
+  const TODAY = new Date(); TODAY.setHours(0,0,0,0);
+
+  const [tab,        setTab]        = useState(()=>{ const s=loadStored(); return s.tab??"present"; });
+  const [fteRate,    setFteRate]    = useState(()=>{ const s=loadStored(); return s.fteRate??1950; });
+  const [ncFteRate,  setNcFteRate]  = useState(()=>{ const s=loadStored(); return s.ncFteRate??2100; });
+  const [weeks,      setWeeks]      = useState(()=>{ const s=loadStored(); return s.weeks??INIT_WEEKS; });
+  const [invoices,   setInvoices]   = useState(()=>{ const s=loadStored(); return s.invoices??{}; });
+  const [cdata,      setCdata]      = useState(()=>{ const s=loadStored(); return s.cdata??clientDefaults(); });
+  const [pipeline,   setPipeline]   = useState(()=>{ const s=loadStored(); return s.pipeline??CLIENTS.map(()=>0); });
+  const [newClients, setNewClients] = useState(()=>{ const s=loadStored(); return s.newClients??[]; });
+  const [ncRate,     setNcRate]     = useState(()=>{ const s=loadStored(); return s.ncRate??5; });
+  const [rev,        setRev]        = useState(()=>{ const s=loadStored(); return s.rev??{}; });
+  const [copyLabel,  setCopyLabel]  = useState("Export to Sheets");
+  const [auditLog,   setAuditLog]   = useState(()=>{ const s=loadStored(); return s.auditLog??[]; });
+  const [auditFilter,setAuditFilter]= useState("All");
+  const [savedAt,    setSavedAt]    = useState(null);
+
+  // ── PREVIEW: shared storage via anonymous JSON blob (last-write-wins, ~5s poll) ──
+  const SHARE_URL = "https://jsonblob.com/api/jsonBlob/019f8b66-f046-7b81-a417-1fe30dba6a4a";
+  const lastData  = React.useRef(null);   // null until first load, so we never clobber remote with defaults
+  const lastRev   = React.useRef(0);
+  const dataObj   = () => ({tab,fteRate,ncFteRate,weeks,invoices,cdata,pipeline,newClients,ncRate,rev,auditLog});
+  const applyRemote = s => {
+    if(!s||typeof s!=="object") return;
+    if("fteRate"in s)setFteRate(s.fteRate); if("ncFteRate"in s)setNcFteRate(s.ncFteRate);
+    if("weeks"in s)setWeeks(s.weeks); if("invoices"in s)setInvoices(s.invoices);
+    if("cdata"in s)setCdata(s.cdata); if("pipeline"in s)setPipeline(s.pipeline);
+    if("newClients"in s)setNewClients(s.newClients); if("ncRate"in s)setNcRate(s.ncRate);
+    if("rev"in s)setRev(s.rev); if("auditLog"in s)setAuditLog(s.auditLog);
+    if("tab"in s)setTab(s.tab);
+  };
+  // initial load from shared store
+  useEffect(()=>{
+    fetch(SHARE_URL).then(r=>r.json()).then(s=>{
+      lastRev.current=s._rev||0; lastData.current=JSON.stringify({...s,_rev:undefined}); applyRemote(s); setSavedAt(Date.now());
+    }).catch(()=>{ lastData.current="{}"; });
+    return undefined;
+  },[]);
+  // push local changes (debounced)
+  useEffect(()=>{
+    const js=JSON.stringify(dataObj());
+    if(lastData.current===null || js===lastData.current) return;
+    const t=setTimeout(()=>{
+      const rev=Date.now(); lastData.current=js; lastRev.current=rev;
+      fetch(SHARE_URL,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({...dataObj(),_rev:rev})})
+        .then(()=>setSavedAt(Date.now())).catch(()=>{});
+    },700);
+    return ()=>clearTimeout(t);
+  },[tab,fteRate,ncFteRate,weeks,invoices,cdata,pipeline,newClients,ncRate,rev,auditLog]);
+  // poll for other people's changes
+  useEffect(()=>{
+    const iv=setInterval(()=>{
+      fetch(SHARE_URL).then(r=>r.json()).then(s=>{
+        if((s._rev||0)!==lastRev.current){ lastRev.current=s._rev||0; lastData.current=JSON.stringify({...s,_rev:undefined}); applyRemote(s); }
+      }).catch(()=>{});
+    },5000);
+    return ()=>clearInterval(iv);
+  },[]);
+
+  const derived = CLIENTS.map((c,i) => {
+    const d = cdata[i]??clientDefaults()[i];
+    const total    = d.masterLease+d.masterAgreement+d.amendment+d.notice+d.commencementLetter;
+    const proc     = Math.max(0,total-d.invalidDocs-d.doNotProcess);
+    const initRem  = 1-c.pct/100;
+    const curRem   = Math.max(0,1-d.pct/100);
+    const docScale = c.docs>0?proc/c.docs:1;
+    const fteDays  = initRem>0?c.initFteDays*(curRem/initRem)*docScale:0;
+    const impliedRate = initRem>0&&c.initFteDays>0?(c.docs*initRem)/c.initFteDays:0;
+    const wkLeft   = workDaysUntil(TODAY,c.base);
+    const reqFTEs  = wkLeft>0&&fteDays>0?fteDays/wkLeft:0;
+    // FTE ramp (opt-in per client via d.rampOn). Off => original flat behavior, zero change.
+    const rampOn   = !!d.rampOn;
+    const rStart   = Math.max(0, d.startFTE??0);
+    const rDate    = d.rampDate ? new Date(d.rampDate+"T00:00:00") : new Date(TODAY);
+    const rTimeline= Math.max(1, monthIndex(rDate, c.base));       // months from ramp start to baseline deadline
+    const rMonths  = Math.min(Math.max(0, d.rampMonths??0), rTimeline);
+    const rSugg    = suggestTarget(fteDays, rTimeline, rStart, rMonths);  // target solved to hit baseline
+    const rTarget  = d.targetFTE>0 ? d.targetFTE : rSugg;
+    const rSched   = rampOn ? rampSchedule(rStart, rTarget, rMonths, fteDays) : null;
+    const curFTEs  = rampOn ? rampFTE(monthIndex(rDate,TODAY), rStart, rTarget, rMonths) : d.ftes;
+    const monthlyFTEs  = rSched ? rSched.monthlyFTEs : [];
+    const monthsToDone = rSched ? rSched.months : null;
+    const eta      = rampOn ? (fteDays>0?addCalMonths(rDate, rSched.months):new Date(TODAY))
+                            : (fteDays>0?addWorkDays(TODAY,fteDays/Math.max(1,d.ftes)):new Date(TODAY));
+    const delta    = Math.round((eta.getTime()-c.base.getTime())/86400000);
+    const wkdWkd   = weeks.reduce((s,w)=>s+(w.ftes[i]??0)*5,0);
+    const docsDone = proc*(d.pct/100);
+    const thru     = wkdWkd>0?docsDone/wkdWkd:0;
+    const remMos   = d.ftes>0?(fteDays/d.ftes)/22:0;
+    const remSpend = rampOn&&rSched ? rSched.totalFteMonths*fteRate : remMos*d.ftes*fteRate;
+    const weight   = PROB_WEIGHT[d.probability]??1;
+    const revenue  = d.docsets*(rev[c.name]??0);
+    const profit   = revenue-remSpend;
+    const margin   = revenue>0?profit/revenue:0;
+    return {d,total,proc,fteDays,impliedRate,wkLeft,reqFTEs,eta,delta,wkdWkd,docsDone,thru,remMos,remSpend,revenue,profit,margin,rampOn,curFTEs,monthlyFTEs,monthsToDone,weight,targetSugg:rSugg,rTimeline};
+  });
+
+  function normNC(raw) {
+    return {
+      id: raw.id??String(Date.now()), name: raw.name??"New Client",
+      leases: raw.leases??0, hoursPerLease: raw.hoursPerLease??0,
+      fteRate: raw.fteRate??ncFteRate,
+      kickoffDate: raw.kickoffDate ?? raw.startDate ?? "",
+      rampDate: raw.rampDate ?? raw.startDate ?? "",
+      timelineMonths: raw.timelineMonths ?? (raw.days ? Math.max(1,Math.round(raw.days/30)) : 6),
+      startFTE: raw.startFTE ?? 0,
+      targetFTE: raw.targetFTE ?? 0,          // 0 => use the auto-suggested target
+      rampMonths: raw.rampMonths ?? 3,
+      probability: PROBS.includes(raw.probability) ? raw.probability : "High",
+      active: raw.active ?? false,
+    };
+  }
+
+  function calcNC(nc) {
+    const effectiveRate = nc.hoursPerLease>0?8/nc.hoursPerLease:ncRate;      // leases / FTE / day
+    const workFteDays   = (nc.leases>0 && effectiveRate>0) ? nc.leases/effectiveRate : 0;
+    const start         = Math.max(0, nc.startFTE||0);
+    const rampMonths    = Math.min(Math.max(0, nc.rampMonths||0), Math.max(1, nc.timelineMonths||1));  // capped at timeline
+    const suggTarget    = suggestTarget(workFteDays, nc.timelineMonths, start, rampMonths);
+    const target        = nc.targetFTE>0 ? nc.targetFTE : suggTarget;
+    const rampStart     = nc.rampDate ? new Date(nc.rampDate+"T00:00:00")
+                        : nc.kickoffDate ? new Date(nc.kickoffDate+"T00:00:00") : new Date(TODAY);
+    const sched         = rampSchedule(start, target, rampMonths, workFteDays);
+    const monthsToDone  = sched.months;
+    const eta           = addCalMonths(rampStart, monthsToDone);
+    const currMonthly   = rampFTE(monthIndex(rampStart, TODAY), start, target, rampMonths);
+    const monthlyCost   = target*nc.fteRate;               // peak monthly run-rate
+    const totalCost     = sched.totalFteMonths*nc.fteRate; // Σ (monthly FTE × rate)
+    const docsets       = nc.leases>0?Math.max(1,Math.round(nc.leases/30)):0;
+    const revenue       = docsets*(rev[nc.id]??0);
+    const profit        = revenue-totalCost;
+    const margin        = revenue>0?profit/revenue:0;
+    const weight        = PROB_WEIGHT[nc.probability]??1;
+    return {ftes:target, target, start, suggTarget, rampMonths, rampStart, effectiveRate, workFteDays,
+            monthsToDone, months:monthsToDone, eta, currMonthly, monthlyCost, totalCost,
+            totalFteMonths:sched.totalFteMonths, docsets, revenue, profit, margin, weight,
+            monthlyFTEs:sched.monthlyFTEs, done:sched.done};
+  }
+
+  const normClients  = newClients.map(normNC);
+  const pipelineNC   = normClients.filter(nc=>!nc.active);   // shown in Future
+  const activeNC     = normClients.filter(nc=>nc.active);    // promoted into Present
+  const activeNCFtes = activeNC.reduce((s,nc)=>s+Math.round(calcNC(nc).currMonthly),0);
+  const activeNCSpend= activeNC.reduce((s,nc)=>s+calcNC(nc).totalCost,0);
+  const totalFTEs    = derived.reduce((s,x)=>s+Math.round(x.curFTEs),0);
+  const wkCostPerFTE = fteRate/4.33;
+  const monthKeys    = [...new Set(weeks.map(w=>w.monthKey))];
+  const totalNewFTEs = normClients.reduce((s,nc)=>s+calcNC(nc).ftes,0);
+
+  const logEdit = (view, target, field, from, to) => {
+    if (from === to) return;
+    const f = from===undefined||from===null||from===""?"—":from;
+    const t = to===undefined||to===null||to===""?"—":to;
+    setAuditLog(p => [{ts: Date.now(), view, target, field, from: f, to: t}, ...p].slice(0, 500));
+  };
+
+  const FIELD_LABELS = { pct:"% Complete", ftes:"FTEs", docsets:"Docsets", masterLease:"Master Lease", masterAgreement:"Master Agreement", amendment:"Amendment", notice:"Notice", commencementLetter:"Commencement Letter", invalidDocs:"Invalid docs", doNotProcess:"Do not process", name:"Name", leases:"Leases", hoursPerLease:"Hrs/lease", days:"Days", startDate:"Start date", fteRate:"$/FTE/mo", rampOn:"Ramp-up enabled", kickoffDate:"Kickoff date", rampDate:"Ramp-up date", timelineMonths:"Timeline (months)", startFTE:"Start FTEs", targetFTE:"Target FTEs", rampMonths:"Ramp length (months)", probability:"Probability", active:"Activated (moved to Present)" };
+  const fieldLabel = k => FIELD_LABELS[k] ?? k;
+
+  const setField   = (i,f,v) => { logEdit("Present", CLIENTS[i].name, fieldLabel(f), cdata[i]?.[f], v); setCdata(p=>p.map((c,idx)=>idx===i?{...c,[f]:v}:c)); };
+  const setWkFTE   = (wi,ci,v) => { logEdit("Past", `${weeks[wi]?.label} · ${CLIENTS[ci].short}`, "FTEs", weeks[wi]?.ftes[ci], v); setWeeks(p=>p.map((w,idx)=>{if(idx!==wi)return w;const f=[...w.ftes];f[ci]=v;return{...w,ftes:f};})); };
+  const addWeek    = () => { const nw=nextWeekInfo(weeks, CLIENTS.map((_,i)=>Math.round(derived[i]?.curFTEs??0))); logEdit("Past", "—", "Week added", "—", nw.label); setWeeks(p=>[...p,nw]); };
+  const setPipeDoc = (i,v) => { logEdit("Future", CLIENTS[i].name, "Pipeline +docs", pipeline[i], v); setPipeline(p=>p.map((x,idx)=>idx===i?v:x)); };
+  const addNC      = () => { logEdit("Future", "—", "Client added", "—", "New Client"); setNewClients(p=>[...p,{id:String(Date.now()),name:"New Client",leases:0,hoursPerLease:16,fteRate:ncFteRate,kickoffDate:"",rampDate:"",timelineMonths:6,startFTE:0,targetFTE:0,rampMonths:3,probability:"High",active:false}]); };
+  const updNC      = (id,patch) => { const cur=newClients.find(n=>n.id===id); Object.keys(patch).forEach(k=>logEdit("Future", cur?.name??id, fieldLabel(k), cur?.[k], patch[k])); setNewClients(p=>p.map(n=>n.id===id?{...n,...patch}:n)); };
+  const delNC      = id => { const nm=newClients.find(n=>n.id===id)?.name??id; logEdit("Future", nm, "Client removed", "active", "—"); setNewClients(p=>p.filter(n=>n.id!==id)); };
+  const setRevenue = (k,v) => { const nm=CLIENTS.find(c=>c.name===k)?.name??(newClients.find(n=>n.id===k)?.name??k); logEdit("P&L", nm, "$/Docset", rev[k], v); setRev(p=>({...p,[k]:v})); };
+  const setInvoice = (mk,v) => { logEdit("Past", mlabel(mk), "Invoice received", invoices[mk], v); setInvoices(p=>({...p,[mk]:v})); };
+
+  function copyForSheets() {
+    const rows=["RESOURCE CALCULATOR","Generated: "+new Date().toLocaleDateString(),""];
+    rows.push("Client\t% Complete\tFTEs\tETA\tvs Baseline\tRem. Spend");
+    CLIENTS.forEach((c,i)=>{const dr=derived[i];rows.push([c.name,dr.d.pct+"%",Math.round(dr.curFTEs),fmtDate(dr.eta),dr.delta===0?"On time":dr.delta>0?`+${dr.delta}d late`:`${Math.abs(dr.delta)}d early`,Math.round(dr.remSpend)].join("\t"));});
+    navigator.clipboard.writeText(rows.join("\n")).then(()=>{setCopyLabel("Copied!");setTimeout(()=>setCopyLabel("Export to Sheets"),2500);});
+  }
+
+  const tabs = [
+    {id:"past",    label:"Past",    sub:"Invoices"},
+    {id:"present", label:"Present", sub:"Throughput"},
+    {id:"future",  label:"Future",  sub:"Forecast"},
+    {id:"pnl",     label:"P&L",    sub:"Margins"},
+    {id:"audit",   label:"Audit",   sub:"Trail"},
+  ];
+
+  return (
+    <div className="app">
+      {/* Sidebar */}
+      <nav className="sidebar">
+        <div className="sidebar-brand">
+          <h1>Resource<br/>Calculator</h1>
+          <p>Adams Bridge</p>
+        </div>
+
+        <div className="nav-label">Views</div>
+        <div className="nav-section">
+          {tabs.map(t=>(
+            <button key={t.id} className={`nav-item${tab===t.id?" active":""}`} onClick={()=>setTab(t.id)}>
+              <span className="dot" />
+              <span>{t.label}</span>
+              <span style={{fontSize:11,color:"var(--text3)",marginLeft:"auto"}}>{t.sub}</span>
+            </button>
+          ))}
+        </div>
+
+        <div className="sidebar-footer">
+          <div className="rate-group" style={{flexDirection:"column",alignItems:"flex-start",gap:4,marginBottom:12}}>
+            <label>Existing FTE rate / mo</label>
+            <input type="number" value={fteRate} onChange={e=>{ const nv=Math.max(1,p0(e.target.value)||1950); logEdit("Settings","—","Existing FTE rate",fteRate,nv); setFteRate(nv); }} style={{width:"100%"}} />
+          </div>
+          <div className="rate-group" style={{flexDirection:"column",alignItems:"flex-start",gap:4,marginBottom:16}}>
+            <label>New client rate / mo</label>
+            <input type="number" value={ncFteRate} onChange={e=>{ const nv=Math.max(1,p0(e.target.value)||2100); logEdit("Settings","—","New client rate",ncFteRate,nv); setNcFteRate(nv); }} style={{width:"100%"}} />
+          </div>
+          <div title="Changes are saved automatically in this browser" style={{fontSize:11,color:"var(--text3)",marginBottom:10,display:"flex",alignItems:"center",gap:6}}>
+            <span style={{width:6,height:6,borderRadius:"50%",background:"var(--green)",display:"inline-block",flexShrink:0}} />
+            {savedAt ? `Saved · ${new Date(savedAt).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"})}` : "All changes saved"}
+          </div>
+          <button className="btn btn-primary" onClick={copyForSheets} style={{width:"100%",justifyContent:"center"}}>
+            {copyLabel}
+          </button>
+        </div>
+      </nav>
+
+      {/* Main content */}
+      <main className="main">
+        <div style={{background:"var(--amber-bg)",border:"1px solid var(--amber)",color:"var(--amber)",borderRadius:8,padding:"9px 13px",marginBottom:20,fontSize:12,lineHeight:1.4}}>
+          🔗 <strong>SHARED PREVIEW</strong> — everything you enter here is saved to a shared online store and appears for <em>anyone</em> who opens this link (syncs every ~5 seconds). Open it in two windows to see it work. Use test data only; this demo store is public and temporary.
+        </div>
+
+        {/* ── PAST ── */}
+        {tab==="past" && (
+          <>
+            <div className="page-header">
+              <div>
+                <div className="page-title">Past · Invoices</div>
+                <div className="page-sub">Weekly FTE deployment and invoice reconciliation</div>
+              </div>
+            </div>
+
+            {(()=>{
+              const spend=weeks.reduce((s,w)=>s+w.ftes.reduce((a,b)=>a+b,0)*wkCostPerFTE,0);
+              const invoiced=Object.values(invoices).reduce((a,b)=>a+b,0);
+              const avg=weeks.length>0?weeks.reduce((s,w)=>s+w.ftes.reduce((a,b)=>a+b,0),0)/weeks.length:0;
+              return (
+                <div className="stat-row">
+                  <Stat value={fmtMoney(spend)} label="Expected spend to date" />
+                  <Stat value={fmtMoney(invoiced)} label="Total invoiced" tone={invoiced>=spend?"green":"amber"} />
+                  <Stat value={avg.toFixed(1)} label="Avg FTEs / week" />
+                </div>
+              );
+            })()}
+
+            <div className="section">
+              <div className="section-title">Weekly FTE Deployment</div>
+              <div className="table-card">
+                <div className="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Week of</th>
+                        {CLIENTS.map(c=><th key={c.short} className="r">{c.short}</th>)}
+                        <th className="r">Total</th>
+                        <th className="r">Wk cost</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {weeks.map((w,wi)=>{
+                        const tot=w.ftes.reduce((a,b)=>a+b,0);
+                        return (
+                          <tr key={wi}>
+                            <td className="muted">{w.label}</td>
+                            {CLIENTS.map((_,ci)=>(
+                              <td key={ci} className="r">
+                                <input type="number" className="week-input" value={w.ftes[ci]??0} onChange={e=>setWkFTE(wi,ci,p0(e.target.value))} />
+                              </td>
+                            ))}
+                            <td className="r bold">{tot}</td>
+                            <td className="r muted">{fmtMoney(tot*wkCostPerFTE)}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              <button className="btn btn-ghost" onClick={addWeek} style={{marginTop:10,fontSize:12}}>+ Add week</button>
+            </div>
+
+            <div className="section">
+              <div className="section-title">Invoice Verification</div>
+              <div className="table-card">
+                <div className="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Month</th>
+                        <th className="r">Expected</th>
+                        <th className="r">Received</th>
+                        <th className="r">Variance</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {monthKeys.map(mk=>{
+                        const mw=weeks.filter(w=>w.monthKey===mk);
+                        const exp=Math.round(mw.reduce((s,w)=>s+w.ftes.reduce((a,b)=>a+b,0)*wkCostPerFTE,0));
+                        const rec=invoices[mk]??0;
+                        const diff=rec-exp;
+                        return (
+                          <tr key={mk}>
+                            <td>{mlabel(mk)}</td>
+                            <td className="r muted">{fmtMoney(exp)}</td>
+                            <td className="r">
+                              <input type="number" value={rec>0?rec:""} onChange={e=>setInvoice(mk,p0(e.target.value))} placeholder="—" style={{width:88}} />
+                            </td>
+                            <td className={`r ${rec>0?(diff>=0?"green":"red"):""}`}>{rec>0?fmtMoney(diff):"—"}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* ── PRESENT ── */}
+        {tab==="present" && (
+          <>
+            <div className="page-header">
+              <div>
+                <div className="page-title">Present · Throughput</div>
+                <div className="page-sub">Current status across active clients</div>
+              </div>
+            </div>
+
+            <div className="stat-row">
+              <Stat value={totalFTEs+activeNCFtes} label="Total FTEs deployed" tone={totalFTEs+activeNCFtes>15?"amber":undefined} />
+              <Stat value={`${CLIENTS.filter((_,i)=>derived[i].d.pct>=100).length}/${CLIENTS.length}`} label="Clients complete" />
+              <Stat value={fmtMoney(derived.reduce((s,d)=>s+d.remSpend,0)+activeNCSpend)} label="Remaining spend" />
+            </div>
+
+            <div className="section">
+              <div className="section-title">Client Status</div>
+              {CLIENTS.map((c,i)=>(
+                <ClientCard
+                  key={c.name}
+                  client={c}
+                  d={cdata[i]??clientDefaults()[i]}
+                  derived={derived[i]}
+                  onField={(f,v)=>setField(i,f,v)}
+                />
+              ))}
+            </div>
+            {activeNC.length>0 && (
+              <div className="section">
+                <div className="section-title">Now Active — from pipeline</div>
+                {activeNC.map(nc=>(
+                  <NCCard key={nc.id} nc={nc} calc={calcNC(nc)} ncFteRate={ncFteRate} onUpd={patch=>updNC(nc.id,patch)} onDel={()=>delNC(nc.id)} onToggleActive={()=>updNC(nc.id,{active:false})} />
+                ))}
+              </div>
+            )}
+          </>
+        )}
+
+        {/* ── FUTURE ── */}
+        {tab==="future" && (
+          <>
+            <div className="page-header">
+              <div>
+                <div className="page-title">Future · Forecast</div>
+                <div className="page-sub">Completion projections and new client modeling</div>
+              </div>
+            </div>
+
+            {(()=>{
+              const totalRem=derived.reduce((s,d)=>s+d.remSpend,0);
+              const addlFTEs=Math.max(0,Math.ceil(derived.reduce((s,d)=>s+(d.reqFTEs>d.curFTEs?d.reqFTEs-d.curFTEs:0),0)));
+              const atRisk=CLIENTS.filter((_,i)=>derived[i].delta>0).length;
+              return (
+                <div className="stat-row">
+                  <Stat value={fmtMoney(totalRem)} label="Total remaining spend" />
+                  <Stat value={addlFTEs>0?`+${addlFTEs}`:"None needed"} label="Extra FTEs to hit baseline" tone={addlFTEs>0?"red":"green"} />
+                  <Stat value={`${atRisk} / ${CLIENTS.length}`} label="Clients behind baseline" tone={atRisk>0?"amber":undefined} />
+                </div>
+              );
+            })()}
+
+            <div className="section">
+              <div className="section-title">Completion Forecast</div>
+              <div className="table-card">
+                <div className="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Client</th>
+                        <th>ETA</th>
+                        <th>vs Baseline</th>
+                        <th className="r">Days left</th>
+                        <th className="r">Req. FTEs</th>
+                        <th className="r">Current</th>
+                        <th className="r">Gap</th>
+                        <th className="r">Rate</th>
+                        <th className="r">Rem. spend</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {CLIENTS.map((c,i)=>{
+                        const {d,reqFTEs,delta,eta,proc,remSpend,wkLeft,impliedRate,curFTEs}=derived[i];
+                        const req=proc>0?Math.ceil(reqFTEs):0; const cur=Math.round(curFTEs); const gap=req-cur;
+                        const tone=delta>7||gap>3?"red":delta>0||gap>0?"amber":"";
+                        return (
+                          <tr key={c.name}>
+                            <td className="bold">{c.name}</td>
+                            <td>{fmtDate(eta)}</td>
+                            <td className={tone}>{delta===0?"On time":delta>0?`+${delta}d late`:`${Math.abs(delta)}d early`}</td>
+                            <td className="r muted">{wkLeft}</td>
+                            <td className="r">{proc>0?req:"—"}</td>
+                            <td className="r">{cur}</td>
+                            <td className={`r ${gap>0?"red":gap<0?"green":""}`}>{gap>0?`+${gap}`:gap<0?gap:"—"}</td>
+                            <td className="r muted">{impliedRate.toFixed(1)}</td>
+                            <td className="r">{fmtMoney(remSpend)}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <div className="section">
+              <div className="section-title">Pipeline — Additional Docs</div>
+              <div className="table-card">
+                <div className="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Client</th>
+                        <th className="r">+ Docs</th>
+                        <th className="r">New total</th>
+                        <th className="r">FTEs req.</th>
+                        <th>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {CLIENTS.map((c,i)=>{
+                        const ex=pipeline[i]??0;
+                        const {proc,d,wkLeft}=derived[i];
+                        const initRem=1-c.pct/100; const curRem=Math.max(0,1-d.pct/100);
+                        const baseRatio=initRem>0?curRem/initRem:0;
+                        const docScale=c.docs>0?(proc+ex)/c.docs:1;
+                        const newFteDays=c.initFteDays*baseRatio*docScale;
+                        const newReq=wkLeft>0?Math.ceil(newFteDays/wkLeft):0;
+                        const addl=Math.max(0,newReq-d.ftes);
+                        return (
+                          <tr key={c.name}>
+                            <td>{c.name}</td>
+                            <td className="r"><input type="number" value={ex>0?ex:""} onChange={e=>setPipeDoc(i,p0(e.target.value))} placeholder="0" style={{width:72}} /></td>
+                            <td className="r muted">{ex>0?(proc+ex).toLocaleString():"—"}</td>
+                            <td className="r">{ex>0?newReq:"—"}</td>
+                            <td>{ex>0?(addl>0?<Badge tone="amber">+{addl} FTEs needed</Badge>:<Badge tone="green">Sufficient</Badge>):"—"}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <div className="section">
+              <div className="row" style={{marginBottom:12,gap:12}}>
+                <div className="section-title" style={{margin:0}}>New Clients</div>
+                <div className="spacer" />
+                <div className="row" style={{gap:8}}>
+                  <span style={{fontSize:11,color:"var(--text3)"}}>Default rate:</span>
+                  <input type="number" value={ncRate} onChange={e=>{ const nv=pf(e.target.value,5); logEdit("Settings","—","Default docs/FTE/day",ncRate,nv); setNcRate(nv); }} style={{width:52}} />
+                  <span style={{fontSize:11,color:"var(--text3)"}}>docs/FTE/day</span>
+                  <button className="btn btn-ghost" onClick={addNC}>+ Add client</button>
+                </div>
+              </div>
+
+              {pipelineNC.length===0 ? (
+                <div style={{padding:"28px 20px",textAlign:"center",color:"var(--text3)",fontSize:13,background:"var(--surface)",border:"1px solid var(--border)",borderRadius:12}}>
+                  {activeNC.length>0?"All new clients activated — see the Present view.":"No new clients yet — click \"+ Add client\" to model resource needs"}
+                </div>
+              ) : (
+                <>
+                  {pipelineNC.map(nc=>(
+                    <NCCard key={nc.id} nc={nc} calc={calcNC(nc)} ncFteRate={ncFteRate} onUpd={patch=>updNC(nc.id,patch)} onDel={()=>delNC(nc.id)} onToggleActive={()=>updNC(nc.id,{active:true})} />
+                  ))}
+                  {pipelineNC.some(nc=>nc.leases>0)&&(()=>{
+                    const active   = pipelineNC.filter(nc=>nc.leases>0).map(calcNC);
+                    const newPeak  = active.reduce((s,c)=>s+c.target,0);
+                    const spendMo  = active.reduce((s,c)=>s+c.monthlyCost,0);
+                    const wPeak    = active.reduce((s,c)=>s+c.target*c.weight,0);
+                    const wSpendMo = active.reduce((s,c)=>s+c.monthlyCost*c.weight,0);
+                    return (
+                      <div className="table-card" style={{padding:"16px",marginTop:8}}>
+                        <div className="stat-row cols-4" style={{marginBottom:0}}>
+                          <Stat value={totalFTEs} label="Existing FTEs" />
+                          <Stat value={newPeak} label="New client FTEs (peak)" tone="amber" />
+                          <Stat value={totalFTEs+newPeak} label="Total FTEs (peak)" tone={totalFTEs+newPeak>15?"red":"green"} />
+                          <Stat value={fmtMoney(spendMo)} label="New client spend / mo" />
+                        </div>
+                        <div style={{fontSize:12,color:"var(--text2)",marginTop:14,display:"flex",gap:24,flexWrap:"wrap",alignItems:"center"}}>
+                          <span><span style={{color:"var(--text3)"}}>Risk-adjusted new FTEs:</span> <strong>{Math.round(wPeak)}</strong></span>
+                          <span><span style={{color:"var(--text3)"}}>Risk-adjusted spend / mo:</span> <strong>{fmtMoney(wSpendMo)}</strong></span>
+                          <span style={{color:"var(--text3)",fontSize:11}}>weighted by probability · High 90% · Medium 50% · Low 20%</span>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </>
+              )}
+            </div>
+          </>
+        )}
+
+        {/* ── P&L ── */}
+        {tab==="pnl" && (
+          <>
+            <div className="page-header">
+              <div>
+                <div className="page-title">P&L · Margins</div>
+                <div className="page-sub">Revenue, cost, and gross profit per client</div>
+              </div>
+            </div>
+
+            <div className="section">
+              <div className="section-title">Existing Clients — {fmtMoney(fteRate)}/FTE/mo</div>
+              <div className="table-card">
+                <div className="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Client</th>
+                        <th className="r">Docsets</th>
+                        <th className="r">$/Docset</th>
+                        <th className="r">Revenue</th>
+                        <th className="r">Cost</th>
+                        <th className="r">Gross profit</th>
+                        <th className="r">Margin</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {CLIENTS.map((c,i)=>{
+                        const {d,remSpend,profit,revenue,margin}=derived[i]; const pd=rev[c.name]??0;
+                        return (
+                          <tr key={c.name}>
+                            <td className="bold">{c.name}</td>
+                            <td className="r muted">{d.docsets}</td>
+                            <td className="r"><input type="number" value={pd>0?pd:""} onChange={e=>setRevenue(c.name,p0(e.target.value))} placeholder="0" style={{width:80}} /></td>
+                            <td className="r">{revenue>0?fmtMoney(revenue):"—"}</td>
+                            <td className="r muted">{fmtMoney(remSpend)}</td>
+                            <td className={`r bold ${revenue>0?(profit>0?"green":"red"):""}`}>{revenue>0?fmtMoney(profit):"—"}</td>
+                            <td className={`r ${revenue>0?(margin>0.3?"green":margin>0?"amber":"red"):""}`}>{revenue>0?fmtPct(margin):"—"}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {(()=>{
+                const totRev=derived.reduce((s,d)=>s+d.revenue,0);
+                const totCost=derived.reduce((s,d)=>s+d.remSpend,0);
+                const totProf=totRev-totCost; const totMarg=totRev>0?totProf/totRev:0;
+                return (
+                  <div className="stat-row cols-4" style={{marginTop:12}}>
+                    <Stat value={totRev>0?fmtMoney(totRev):"—"} label="Total revenue" />
+                    <Stat value={fmtMoney(totCost)} label="Total cost" />
+                    <Stat value={totRev>0?fmtMoney(totProf):"—"} label="Gross profit" tone={totProf>0?"green":totRev>0?"red":undefined} />
+                    <Stat value={totRev>0?fmtPct(totMarg):"—"} label="Margin" tone={totMarg>0.3?"green":totMarg>0?"amber":totRev>0?"red":undefined} />
+                  </div>
+                );
+              })()}
+            </div>
+
+            {normClients.length>0&&(
+              <div className="section">
+                <div className="section-title">New Clients</div>
+                <div className="table-card">
+                  <div className="table-wrap">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Client</th>
+                          <th className="r">Docsets</th>
+                          <th className="r">$/Docset</th>
+                          <th className="r">Revenue</th>
+                          <th className="r">Cost</th>
+                          <th className="r">Gross profit</th>
+                          <th className="r">Margin</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {normClients.map(nc=>{
+                          const calc=calcNC(nc); const pd=rev[nc.id]??0;
+                          return (
+                            <tr key={nc.id}>
+                              <td className="bold">{nc.name}</td>
+                              <td className="r muted">~{calc.docsets}</td>
+                              <td className="r"><input type="number" value={pd>0?pd:""} onChange={e=>setRevenue(nc.id,p0(e.target.value))} placeholder="0" style={{width:80}} /></td>
+                              <td className="r">{calc.revenue>0?fmtMoney(calc.revenue):"—"}</td>
+                              <td className="r muted">{fmtMoney(calc.totalCost)}</td>
+                              <td className={`r bold ${calc.revenue>0?(calc.profit>0?"green":"red"):""}`}>{calc.revenue>0?fmtMoney(calc.profit):"—"}</td>
+                              <td className={`r ${calc.revenue>0?(calc.margin>0.3?"green":calc.margin>0?"amber":"red"):""}`}>{calc.revenue>0?fmtPct(calc.margin):"—"}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* ── AUDIT ── */}
+        {tab==="audit" && (
+          <>
+            <div className="page-header">
+              <div>
+                <div className="page-title">Audit · Trail</div>
+                <div className="page-sub">Every edit, most recent first</div>
+              </div>
+            </div>
+
+            <div className="row" style={{marginBottom:20}}>
+              <select value={auditFilter} onChange={e=>setAuditFilter(e.target.value)} style={{background:"var(--bg)",border:"1px solid var(--border)",borderRadius:6,padding:"5px 8px",font:"inherit",color:"var(--text)",cursor:"pointer"}}>
+                {["All","Present","Past","Future","P&L","Settings"].map(v=><option key={v} value={v}>{v}</option>)}
+              </select>
+              <div className="spacer" />
+              <button className="btn btn-ghost" onClick={()=>{ if(window.confirm("Clear the entire audit trail?")) setAuditLog([]); }}>Clear log</button>
+            </div>
+
+            {(()=>{
+              const rows=auditLog.filter(e=>auditFilter==="All"||e.view===auditFilter);
+              if(rows.length===0) return (
+                <div style={{padding:"28px 20px",textAlign:"center",color:"var(--text3)",fontSize:13,background:"var(--surface)",border:"1px solid var(--border)",borderRadius:12}}>
+                  {auditFilter==="All"?"No edits recorded yet.":"No edits for this filter."}
+                </div>
+              );
+              return (
+                <div className="section">
+                  <div className="table-card">
+                    <div className="table-wrap">
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>Time</th>
+                            <th>View</th>
+                            <th>Target</th>
+                            <th>Field</th>
+                            <th className="r">From</th>
+                            <th className="r">To</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {rows.map((e,idx)=>(
+                            <tr key={e.ts+"-"+idx}>
+                              <td className="muted" style={{fontSize:12}}>{new Date(e.ts).toLocaleString()}</td>
+                              <td>{e.view}</td>
+                              <td className={e.target==="—"?"muted":""}>{e.target}</td>
+                              <td>{e.field}</td>
+                              <td className="r muted">{String(e.from)}</td>
+                              <td className="r">{String(e.to)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+          </>
+        )}
+
+      </main>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
